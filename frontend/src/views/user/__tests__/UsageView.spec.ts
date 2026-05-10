@@ -155,6 +155,14 @@ describe('user UsageView tooltip', () => {
     await flushPromises()
     await nextTick()
 
+    const now = new Date()
+    const today = formatLocalDate(now)
+    expect(query).toHaveBeenCalledWith(expect.objectContaining({
+      start_date: today,
+      end_date: today
+    }), expect.any(Object))
+    expect(getStatsByDateRange).toHaveBeenCalledWith(today, today, undefined)
+
     const setupState = (wrapper.vm as any).$?.setupState
     setupState.tooltipData = {
       request_id: 'req-user-1',
@@ -253,6 +261,12 @@ describe('user UsageView tooltip', () => {
     await flushPromises()
 
     const setupState = (wrapper.vm as any).$?.setupState
+    const now = new Date()
+    const today = formatLocalDate(now)
+    expect(query).toHaveBeenCalledWith(expect.objectContaining({
+      start_date: today,
+      end_date: today
+    }), expect.any(Object))
     await setupState.exportToCSV()
 
     expect(exportedBlob).not.toBeNull()

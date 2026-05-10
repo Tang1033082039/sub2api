@@ -34,14 +34,14 @@ const formatLocalDate = (date: Date): string => {
 }
 
 describe('DateRangePicker', () => {
-  it('uses last 24 hours as the default recognized preset', () => {
+  it('uses today as the default recognized preset', () => {
     const now = new Date()
-    const yesterday = new Date(now.getTime() - 24 * 60 * 60 * 1000)
+    const today = formatLocalDate(now)
 
     const wrapper = mount(DateRangePicker, {
       props: {
-        startDate: formatLocalDate(yesterday),
-        endDate: formatLocalDate(now)
+        startDate: today,
+        endDate: today
       },
       global: {
         stubs: {
@@ -50,7 +50,7 @@ describe('DateRangePicker', () => {
       }
     })
 
-    expect(wrapper.text()).toContain('Last 24 Hours')
+    expect(wrapper.text()).toContain('Today')
   })
 
   it('emits range updates with last24Hours preset when applied', async () => {

@@ -106,7 +106,7 @@ const isOpen = ref(false)
 const containerRef = ref<HTMLElement | null>(null)
 const localStartDate = ref(props.startDate)
 const localEndDate = ref(props.endDate)
-const activePreset = ref<string | null>('last24Hours')
+const activePreset = ref<string | null>(null)
 
 const today = computed(() => {
   // Use local timezone to avoid UTC timezone issues
@@ -218,6 +218,19 @@ const presets: DatePreset[] = [
   }
 ]
 
+const detectPresetValue = (startDate: string, endDate: string): string | null => {
+  for (const preset of presets) {
+    const range = preset.getRange()
+    if (range.start === startDate && range.end === endDate) {
+      return preset.value
+    }
+  }
+
+  return null
+}
+
+activePreset.value = detectPresetValue(localStartDate.value, localEndDate.value)
+
 const displayValue = computed(() => {
   if (activePreset.value) {
     const preset = presets.find((p) => p.value === activePreset.value)
@@ -252,15 +265,7 @@ const selectPreset = (preset: DatePreset) => {
 }
 
 const onDateChange = () => {
-  // Check if current dates match any preset
-  activePreset.value = null
-  for (const preset of presets) {
-    const range = preset.getRange()
-    if (range.start === localStartDate.value && range.end === localEndDate.value) {
-      activePreset.value = preset.value
-      break
-    }
-  }
+  activePreset.value = detectPresetValue(localStartDate.value, localEndDate.value)
 }
 
 const toggle = () => {
