@@ -194,6 +194,22 @@ func TestLoadDefaultIdempotencyConfig(t *testing.T) {
 	}
 }
 
+func TestLoadDefaultUpdateConfig(t *testing.T) {
+	resetViperWithJWTSecret(t)
+
+	cfg, err := Load()
+	if err != nil {
+		t.Fatalf("Load() error: %v", err)
+	}
+
+	if cfg.Update.Repo != "Tang1033082039/sub2api" {
+		t.Fatalf("Update.Repo = %q, want %q", cfg.Update.Repo, "Tang1033082039/sub2api")
+	}
+	if cfg.Update.ProxyURL != "" {
+		t.Fatalf("Update.ProxyURL = %q, want empty", cfg.Update.ProxyURL)
+	}
+}
+
 func TestLoadIdempotencyConfigFromEnv(t *testing.T) {
 	resetViperWithJWTSecret(t)
 	t.Setenv("IDEMPOTENCY_OBSERVE_ONLY", "false")

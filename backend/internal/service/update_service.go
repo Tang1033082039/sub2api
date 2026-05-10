@@ -22,7 +22,7 @@ import (
 const (
 	updateCacheKey = "update_check_cache"
 	updateCacheTTL = 1200 // 20 minutes
-	githubRepo     = "Wei-Shaw/sub2api"
+	defaultGitHubRepo = "Tang1033082039/sub2api"
 
 	// Security: allowed download domains for updates
 	allowedDownloadHost = "github.com"
@@ -51,15 +51,17 @@ type UpdateService struct {
 	githubClient   GitHubReleaseClient
 	currentVersion string
 	buildType      string // "source" for manual builds, "release" for CI builds
+	repo           string
 }
 
 // NewUpdateService creates a new UpdateService
-func NewUpdateService(cache UpdateCache, githubClient GitHubReleaseClient, version, buildType string) *UpdateService {
+func NewUpdateService(cache UpdateCache, githubClient GitHubReleaseClient, version, buildType, repo string) *UpdateService {
 	return &UpdateService{
 		cache:          cache,
 		githubClient:   githubClient,
 		currentVersion: version,
 		buildType:      buildType,
+		repo:           normalizeGitHubRepo(repo),
 	}
 }
 
@@ -274,7 +276,7 @@ func (s *UpdateService) Rollback() error {
 }
 
 func (s *UpdateService) fetchLatestRelease(ctx context.Context) (*UpdateInfo, error) {
-	release, err := s.githubClient.FetchLatestRelease(ctx, githubRepo)
+	release, err := s.githubClient.FetchLatestRelease(ctx, s.repo)
 	if err != nil {
 		return nil, err
 	}
@@ -314,6 +316,14 @@ func (s *UpdateService) getArchiveName() string {
 	osName := runtime.GOOS
 	arch := runtime.GOARCH
 	return fmt.Sprintf("%s_%s", osName, arch)
+}
+
+func normalizeGitHubRepo(repo string) string {
+	repo = strings.TrimSpace(repo)
+	if repo == "" {
+		return defaultGitHubRepo
+	}
+	return repo
 }
 
 // validateDownloadURL checks if the URL is from an allowed domain

@@ -148,6 +148,9 @@ type GeminiTierQuotaConfig struct {
 }
 
 type UpdateConfig struct {
+	// Repo 为在线更新使用的 GitHub 仓库，格式 owner/repo
+	// 例如: "Tang1033082039/sub2api"
+	Repo string `mapstructure:"repo"`
 	// ProxyURL 用于访问 GitHub 的代理地址
 	// 支持 http/https/socks5/socks5h 协议
 	// 例如: "http://127.0.0.1:7890", "socks5://127.0.0.1:1080"
@@ -1605,6 +1608,8 @@ func setDefaults() {
 	viper.SetDefault("pricing.fallback_file", "./resources/model-pricing/model_prices_and_context_window.json")
 	viper.SetDefault("pricing.update_interval_hours", 24)
 	viper.SetDefault("pricing.hash_check_interval_minutes", 10)
+	viper.SetDefault("update.repo", "Tang1033082039/sub2api")
+	viper.SetDefault("update.proxy_url", "")
 
 	// Timezone (default to Asia/Shanghai for Chinese users)
 	viper.SetDefault("timezone", "Asia/Shanghai")

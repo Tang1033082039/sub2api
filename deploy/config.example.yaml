@@ -1081,6 +1081,10 @@ gemini:
 # Update Configuration (在线更新配置)
 # =============================================================================
 update:
+  # GitHub repository used by the admin dashboard online update feature
+  # 管理后台在线更新功能使用的 GitHub 仓库
+  # Format / 格式: owner/repo
+  repo: "Tang1033082039/sub2api"
   # Proxy URL for accessing GitHub (used for online updates and pricing data)
   # 用于访问 GitHub 的代理地址（用于在线更新和定价数据获取）
   # Supports: http, https, socks5, socks5h
