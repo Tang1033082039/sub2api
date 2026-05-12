@@ -43,6 +43,8 @@ type Options struct {
 	ProxyURL              string        // 代理 URL（支持 http/https/socks5/socks5h）
 	Timeout               time.Duration // 请求总超时时间
 	ResponseHeaderTimeout time.Duration // 等待响应头超时时间
+	DialTimeout           time.Duration // TCP 连接超时（含代理握手）
+	TLSHandshakeTimeout   time.Duration // TLS 握手超时
 	InsecureSkipVerify    bool          // 是否跳过 TLS 证书验证（已禁用，不允许设置为 true）
 	ValidateResolvedIP    bool          // 是否校验解析后的 IP（防止 DNS Rebinding）
 	AllowPrivateHosts     bool          // 允许私有地址解析（与 ValidateResolvedIP 一起使用）
@@ -108,12 +110,20 @@ func buildTransport(opts Options) (*http.Transport, error) {
 	if maxIdleConnsPerHost <= 0 {
 		maxIdleConnsPerHost = defaultMaxIdleConnsPerHost
 	}
+	dialTimeout := opts.DialTimeout
+	if dialTimeout <= 0 {
+		dialTimeout = defaultDialTimeout
+	}
+	tlsHandshakeTimeout := opts.TLSHandshakeTimeout
+	if tlsHandshakeTimeout <= 0 {
+		tlsHandshakeTimeout = defaultTLSHandshakeTimeout
+	}
 
 	transport := &http.Transport{
 		DialContext: (&net.Dialer{
-			Timeout: defaultDialTimeout,
+			Timeout: dialTimeout,
 		}).DialContext,
-		TLSHandshakeTimeout:   defaultTLSHandshakeTimeout,
+		TLSHandshakeTimeout:   tlsHandshakeTimeout,
 		MaxIdleConns:          maxIdleConns,
 		MaxIdleConnsPerHost:   maxIdleConnsPerHost,
 		MaxConnsPerHost:       opts.MaxConnsPerHost, // 0 表示无限制
@@ -142,10 +152,12 @@ func buildTransport(opts Options) (*http.Transport, error) {
 }
 
 func buildClientKey(opts Options) string {
-	return fmt.Sprintf("%s|%s|%s|%t|%t|%t|%d|%d|%d",
+	return fmt.Sprintf("%s|%s|%s|%s|%s|%t|%t|%t|%d|%d|%d",
 		strings.TrimSpace(opts.ProxyURL),
 		opts.Timeout.String(),
 		opts.ResponseHeaderTimeout.String(),
+		opts.DialTimeout.String(),
+		opts.TLSHandshakeTimeout.String(),
 		opts.InsecureSkipVerify,
 		opts.ValidateResolvedIP,
 		opts.AllowPrivateHosts,

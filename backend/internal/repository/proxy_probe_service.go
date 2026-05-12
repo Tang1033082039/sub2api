@@ -40,7 +40,10 @@ func NewProxyExitInfoProber(cfg *config.Config) service.ProxyExitInfoProber {
 }
 
 const (
-	defaultProxyProbeTimeout          = 10 * time.Second
+	// 后台手工测试与质量检测需要容忍慢一些的代理首包，不使用网关请求的快失败超时。
+	defaultProxyProbeTimeout          = 30 * time.Second
+	defaultProxyProbeDialTimeout      = 15 * time.Second
+	defaultProxyProbeTLSHandshakeTime = 15 * time.Second
 	defaultProxyProbeResponseMaxBytes = int64(1024 * 1024)
 )
 
@@ -63,11 +66,13 @@ type proxyProbeService struct {
 
 func (s *proxyProbeService) ProbeProxy(ctx context.Context, proxyURL string) (*service.ProxyExitInfo, int64, error) {
 	client, err := httpclient.GetClient(httpclient.Options{
-		ProxyURL:           proxyURL,
-		Timeout:            defaultProxyProbeTimeout,
-		InsecureSkipVerify: s.insecureSkipVerify,
-		ValidateResolvedIP: s.validateResolvedIP,
-		AllowPrivateHosts:  s.allowPrivateHosts,
+		ProxyURL:            proxyURL,
+		Timeout:             defaultProxyProbeTimeout,
+		DialTimeout:         defaultProxyProbeDialTimeout,
+		TLSHandshakeTimeout: defaultProxyProbeTLSHandshakeTime,
+		InsecureSkipVerify:  s.insecureSkipVerify,
+		ValidateResolvedIP:  s.validateResolvedIP,
+		AllowPrivateHosts:   s.allowPrivateHosts,
 	})
 	if err != nil {
 		return nil, 0, fmt.Errorf("failed to create proxy client: %w", err)
