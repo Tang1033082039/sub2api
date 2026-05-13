@@ -42,7 +42,7 @@ func NewProxyExitInfoProber(cfg *config.Config) service.ProxyExitInfoProber {
 const (
 	// 后台手工测试与质量检测需要容忍慢一些的代理首包，不使用网关请求的快失败超时。
 	defaultProxyProbeTimeout          = 30 * time.Second
-	defaultProxyProbeDialTimeout      = 15 * time.Second
+	defaultProxyProbeDialTimeout      = 30 * time.Second
 	defaultProxyProbeTLSHandshakeTime = 15 * time.Second
 	defaultProxyProbeResponseMaxBytes = int64(1024 * 1024)
 )

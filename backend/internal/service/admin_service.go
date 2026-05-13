@@ -503,8 +503,10 @@ var proxyQualityTargets = []proxyQualityTarget{
 }
 
 const (
-	proxyQualityRequestTimeout        = 15 * time.Second
-	proxyQualityResponseHeaderTimeout = 10 * time.Second
+	proxyQualityRequestTimeout        = 30 * time.Second
+	proxyQualityResponseHeaderTimeout = 15 * time.Second
+	proxyQualityDialTimeout           = 30 * time.Second
+	proxyQualityTLSHandshakeTimeout   = 15 * time.Second
 	proxyQualityMaxBodyBytes          = int64(8 * 1024)
 	proxyQualityClientUserAgent       = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/136.0.0.0 Safari/537.36"
 )
@@ -3136,6 +3138,8 @@ func (s *adminServiceImpl) CheckProxyQuality(ctx context.Context, id int64) (*Pr
 		ProxyURL:              proxyURL,
 		Timeout:               proxyQualityRequestTimeout,
 		ResponseHeaderTimeout: proxyQualityResponseHeaderTimeout,
+		DialTimeout:           proxyQualityDialTimeout,
+		TLSHandshakeTimeout:   proxyQualityTLSHandshakeTimeout,
 	})
 	if err != nil {
 		result.Items = append(result.Items, ProxyQualityCheckItem{
