@@ -7,6 +7,17 @@
       {{ t('admin.dashboard.noDataAvailable') }}
     </div>
     <table v-else class="w-full text-xs">
+      <thead>
+        <tr class="text-gray-500 dark:text-gray-400">
+          <th class="py-1 pl-6 text-left font-medium">{{ t('admin.dashboard.spendingRankingUser') }}</th>
+          <th class="py-1 text-right font-medium">{{ t('admin.dashboard.requests') }}</th>
+          <th class="py-1 text-right font-medium">{{ t('admin.dashboard.tokens') }}</th>
+          <th v-if="showCacheRate" class="py-1 text-right font-medium">{{ t('admin.dashboard.cacheRate') }}</th>
+          <th class="py-1 text-right font-medium">{{ t('admin.dashboard.actual') }}</th>
+          <th class="py-1 text-right font-medium">{{ t('admin.dashboard.accountCost') }}</th>
+          <th class="py-1 pr-1 text-right font-medium">{{ t('admin.dashboard.standard') }}</th>
+        </tr>
+      </thead>
       <tbody>
         <tr
           v-for="user in items"
@@ -21,6 +32,9 @@
           </td>
           <td class="py-1 text-right text-gray-500 dark:text-gray-400">
             {{ formatTokens(user.total_tokens) }}
+          </td>
+          <td v-if="showCacheRate" class="py-1 text-right text-sky-600 dark:text-sky-400">
+            {{ formatCacheRate(user.cache_creation_tokens, user.cache_read_tokens, user.total_tokens) }}
           </td>
           <td class="py-1 text-right text-green-600 dark:text-green-400">
             ${{ formatCost(user.actual_cost) }}
@@ -44,10 +58,13 @@ import type { UserBreakdownItem } from '@/types'
 
 const { t } = useI18n()
 
-defineProps<{
+withDefaults(defineProps<{
   items: UserBreakdownItem[]
   loading?: boolean
-}>()
+  showCacheRate?: boolean
+}>(), {
+  showCacheRate: false
+})
 
 const formatTokens = (value: number): string => {
   if (value >= 1_000_000_000) return `${(value / 1_000_000_000).toFixed(2)}B`
@@ -61,5 +78,11 @@ const formatCost = (value: number): string => {
   if (value >= 1) return value.toFixed(2)
   if (value >= 0.01) return value.toFixed(3)
   return value.toFixed(4)
+}
+
+const formatCacheRate = (cacheCreationTokens: number, cacheReadTokens: number, totalTokens: number): string => {
+  const cacheTokens = cacheCreationTokens + cacheReadTokens
+  if (totalTokens <= 0 || cacheTokens <= 0) return '0%'
+  return `${((cacheTokens / totalTokens) * 100).toFixed(1)}%`
 }
 </script>

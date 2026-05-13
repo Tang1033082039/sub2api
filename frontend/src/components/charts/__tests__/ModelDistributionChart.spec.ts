@@ -16,8 +16,10 @@ const messages: Record<string, string> = {
   'admin.dashboard.model': 'Model',
   'admin.dashboard.requests': 'Requests',
   'admin.dashboard.tokens': 'Tokens',
+  'admin.dashboard.cacheRate': 'Cache Rate',
   'admin.dashboard.actual': 'Actual',
   'admin.dashboard.standard': 'Standard',
+  'admin.dashboard.accountCost': 'Cost',
   'admin.dashboard.metricTokens': 'By Tokens',
   'admin.dashboard.metricActualCost': 'By Actual Cost',
   'admin.dashboard.noDataAvailable': 'No data available',
@@ -53,6 +55,7 @@ describe('ModelDistributionChart', () => {
       total_tokens: 1000,
       cost: 1.5,
       actual_cost: 0.2,
+      account_cost: 0.1,
     },
     {
       model: 'model-b',
@@ -64,6 +67,7 @@ describe('ModelDistributionChart', () => {
       total_tokens: 500,
       cost: 0.5,
       actual_cost: 1.4,
+      account_cost: 0.8,
     },
   ]
 

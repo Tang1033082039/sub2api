@@ -110,6 +110,9 @@
                 <p class="text-xl font-bold text-gray-900 dark:text-white">
                   {{ formatTokens(stats.today_tokens) }}
                 </p>
+                <p class="text-xs text-sky-600 dark:text-sky-400">
+                  {{ t('admin.dashboard.cacheRate') }}: {{ formatCacheRate(stats.today_cache_creation_tokens, stats.today_cache_read_tokens, stats.today_tokens) }}
+                </p>
                 <p class="text-xs">
                   <span
                     class="text-green-600 dark:text-green-400"
@@ -145,6 +148,9 @@
                 </p>
                 <p class="text-xl font-bold text-gray-900 dark:text-white">
                   {{ formatTokens(stats.total_tokens) }}
+                </p>
+                <p class="text-xs text-sky-600 dark:text-sky-400">
+                  {{ t('admin.dashboard.cacheRate') }}: {{ formatCacheRate(stats.total_cache_creation_tokens, stats.total_cache_read_tokens, stats.total_tokens) }}
                 </p>
                 <p class="text-xs">
                   <span
@@ -545,6 +551,12 @@ const formatCost = (value: number): string => {
     return value.toFixed(3)
   }
   return value.toFixed(4)
+}
+
+const formatCacheRate = (cacheCreationTokens: number, cacheReadTokens: number, totalTokens: number): string => {
+  const cacheTokens = cacheCreationTokens + cacheReadTokens
+  if (totalTokens <= 0 || cacheTokens <= 0) return '0%'
+  return `${((cacheTokens / totalTokens) * 100).toFixed(1)}%`
 }
 
 const formatDuration = (ms: number): string => {
