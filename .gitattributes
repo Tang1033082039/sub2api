@@ -20,3 +20,6 @@ backend/migrations/*.sql text eol=lf
 
 # Dockerfile
 Dockerfile text eol=lf
+
+# 本仓库的版本号由 fork 维护，合并上游时始终保留本地 VERSION
+backend/cmd/server/VERSION merge=ours
