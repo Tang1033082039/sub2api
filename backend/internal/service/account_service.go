@@ -10,8 +10,9 @@ import (
 )
 
 var (
-	ErrAccountNotFound = infraerrors.NotFound("ACCOUNT_NOT_FOUND", "account not found")
-	ErrAccountNilInput = infraerrors.BadRequest("ACCOUNT_NIL_INPUT", "account input cannot be nil")
+	ErrAccountNotFound           = infraerrors.NotFound("ACCOUNT_NOT_FOUND", "account not found")
+	ErrAccountNilInput           = infraerrors.BadRequest("ACCOUNT_NIL_INPUT", "account input cannot be nil")
+	ErrOpenAIAPIKeyAlreadyExists = infraerrors.Conflict("OPENAI_API_KEY_ALREADY_EXISTS", "同 base_url 的 OpenAI API Key 已存在，已跳过")
 )
 
 const AccountListGroupUngrouped int64 = -1

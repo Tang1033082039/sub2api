@@ -324,10 +324,14 @@ func (h *AccountHandler) importData(ctx context.Context, req DataImportRequest) 
 		created, err := h.adminService.CreateAccount(ctx, accountInput)
 		if err != nil {
 			result.AccountFailed++
+			message := err.Error()
+			if errors.Is(err, service.ErrOpenAIAPIKeyAlreadyExists) {
+				message = "同 base_url 的 OpenAI API Key 已存在，已跳过"
+			}
 			result.Errors = append(result.Errors, DataImportError{
 				Kind:    "account",
 				Name:    item.Name,
-				Message: err.Error(),
+				Message: message,
 			})
 			continue
 		}

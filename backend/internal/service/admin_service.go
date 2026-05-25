@@ -2358,6 +2358,10 @@ func (s *adminServiceImpl) GetAccountsByIDs(ctx context.Context, ids []int64) ([
 }
 
 func (s *adminServiceImpl) CreateAccount(ctx context.Context, input *CreateAccountInput) (*Account, error) {
+	if err := s.ensureOpenAIAPIKeyUnique(ctx, input); err != nil {
+		return nil, err
+	}
+
 	// 绑定分组
 	groupIDs := input.GroupIDs
 	// 如果没有指定分组,自动绑定对应平台的默认分组
@@ -2459,6 +2463,50 @@ func (s *adminServiceImpl) CreateAccount(ctx context.Context, input *CreateAccou
 	}
 
 	return account, nil
+}
+
+func (s *adminServiceImpl) ensureOpenAIAPIKeyUnique(ctx context.Context, input *CreateAccountInput) error {
+	if input == nil || input.Platform != PlatformOpenAI || input.Type != AccountTypeAPIKey {
+		return nil
+	}
+	apiKey := strings.TrimSpace(credentialString(input.Credentials, "api_key"))
+	if apiKey == "" {
+		return nil
+	}
+	baseURL := normalizeOpenAIAPIKeyDuplicateBaseURL(credentialString(input.Credentials, "base_url"))
+	accounts, err := s.accountRepo.ListByPlatform(ctx, PlatformOpenAI)
+	if err != nil {
+		return err
+	}
+	for i := range accounts {
+		existing := accounts[i]
+		if existing.Type != AccountTypeAPIKey {
+			continue
+		}
+		if strings.TrimSpace(existing.GetOpenAIApiKey()) != apiKey {
+			continue
+		}
+		if normalizeOpenAIAPIKeyDuplicateBaseURL(existing.GetOpenAIBaseURL()) == baseURL {
+			return ErrOpenAIAPIKeyAlreadyExists
+		}
+	}
+	return nil
+}
+
+func credentialString(credentials map[string]any, key string) string {
+	if credentials == nil {
+		return ""
+	}
+	value, _ := credentials[key].(string)
+	return value
+}
+
+func normalizeOpenAIAPIKeyDuplicateBaseURL(raw string) string {
+	baseURL := strings.TrimSpace(raw)
+	if baseURL == "" {
+		baseURL = "https://api.openai.com"
+	}
+	return strings.TrimRight(baseURL, "/")
 }
 
 func (s *adminServiceImpl) UpdateAccount(ctx context.Context, id int64, input *UpdateAccountInput) (*Account, error) {

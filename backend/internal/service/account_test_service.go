@@ -32,8 +32,9 @@ import (
 var sseDataPrefix = regexp.MustCompile(`^data:\s*`)
 
 const (
-	testClaudeAPIURL   = "https://api.anthropic.com/v1/messages?beta=true"
-	chatgptCodexAPIURL = "https://chatgpt.com/backend-api/codex/responses"
+	testClaudeAPIURL                = "https://api.anthropic.com/v1/messages?beta=true"
+	chatgptCodexAPIURL              = "https://chatgpt.com/backend-api/codex/responses"
+	openAIAccountTestProbeUserAgent = "codex-tui/0.133.0 (Windows 10.0.19045; x86_64) WindowsTerminal (codex-tui; 0.133.0)"
 )
 
 // TestEvent represents a SSE event for account testing
@@ -584,6 +585,7 @@ func (s *AccountTestService) testOpenAIAccountConnection(c *gin.Context, account
 	// Set common headers
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Authorization", "Bearer "+authToken)
+	req.Header.Set("User-Agent", openAIAccountTestProbeUserAgent)
 
 	// Set OAuth-specific headers for ChatGPT internal API
 	if isOAuth {
@@ -662,6 +664,7 @@ func (s *AccountTestService) testOpenAIChatCompletionsConnection(
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Accept", "text/event-stream")
 	req.Header.Set("Authorization", "Bearer "+authToken)
+	req.Header.Set("User-Agent", openAIAccountTestProbeUserAgent)
 
 	proxyURL := ""
 	if account.ProxyID != nil && account.Proxy != nil {

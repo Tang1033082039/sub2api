@@ -2982,6 +2982,7 @@ export default {
       dataImportButton: '开始导入',
       dataImporting: '导入中...',
       dataImportSelectFile: '请选择数据文件',
+      dataImportSelectedFiles: '已选择 {count} 个 JSON 文件',
       dataImportParseFailed: '数据解析失败',
       dataImportFailed: '数据导入失败',
       dataImportResult: '导入结果',
