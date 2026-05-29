@@ -1,63 +1,93 @@
+//go:build unit
+
 package service
 
 import (
 	"context"
+	"errors"
 	"testing"
 	"time"
+
+	"github.com/stretchr/testify/require"
 )
 
-type updateServiceTestCache struct{}
-
-func (updateServiceTestCache) GetUpdateInfo(context.Context) (string, error) {
-	return "", nil
+type updateServiceCacheStub struct {
+	data string
 }
 
-func (updateServiceTestCache) SetUpdateInfo(context.Context, string, time.Duration) error {
+func (s *updateServiceCacheStub) GetUpdateInfo(context.Context) (string, error) {
+	if s.data == "" {
+		return "", errors.New("cache miss")
+	}
+	return s.data, nil
+}
+
+func (s *updateServiceCacheStub) SetUpdateInfo(_ context.Context, data string, _ time.Duration) error {
+	s.data = data
 	return nil
 }
 
-type updateServiceTestGitHubClient struct {
-	repo string
+type updateServiceGitHubClientStub struct {
+	release *GitHubRelease
+	repo    string
 }
 
-func (c *updateServiceTestGitHubClient) FetchLatestRelease(_ context.Context, repo string) (*GitHubRelease, error) {
-	c.repo = repo
+func (s *updateServiceGitHubClientStub) FetchLatestRelease(_ context.Context, repo string) (*GitHubRelease, error) {
+	s.repo = repo
+	if s.release != nil {
+		return s.release, nil
+	}
 	return &GitHubRelease{
 		TagName: "v1.0.0",
 		Name:    "Release 1.0.0",
 	}, nil
 }
 
-func (*updateServiceTestGitHubClient) DownloadFile(context.Context, string, string, int64) error {
-	return nil
+func (s *updateServiceGitHubClientStub) DownloadFile(context.Context, string, string, int64) error {
+	panic("DownloadFile should not be called")
 }
 
-func (*updateServiceTestGitHubClient) FetchChecksumFile(context.Context, string) ([]byte, error) {
-	return nil, nil
+func (s *updateServiceGitHubClientStub) FetchChecksumFile(context.Context, string) ([]byte, error) {
+	panic("FetchChecksumFile should not be called")
 }
 
 func TestUpdateServiceUsesConfiguredRepo(t *testing.T) {
-	client := &updateServiceTestGitHubClient{}
-	svc := NewUpdateService(updateServiceTestCache{}, client, "0.9.0", "release", "owner/custom-repo")
+	client := &updateServiceGitHubClientStub{}
+	svc := NewUpdateService(&updateServiceCacheStub{}, client, "0.9.0", "release", "owner/custom-repo")
 
 	_, err := svc.fetchLatestRelease(context.Background())
-	if err != nil {
-		t.Fatalf("fetchLatestRelease() error = %v", err)
-	}
-	if client.repo != "owner/custom-repo" {
-		t.Fatalf("FetchLatestRelease repo = %q, want %q", client.repo, "owner/custom-repo")
-	}
+
+	require.NoError(t, err)
+	require.Equal(t, "owner/custom-repo", client.repo)
 }
 
 func TestUpdateServiceFallsBackToDefaultRepo(t *testing.T) {
-	client := &updateServiceTestGitHubClient{}
-	svc := NewUpdateService(updateServiceTestCache{}, client, "0.9.0", "release", "  ")
+	client := &updateServiceGitHubClientStub{}
+	svc := NewUpdateService(&updateServiceCacheStub{}, client, "0.9.0", "release", "  ")
 
 	_, err := svc.fetchLatestRelease(context.Background())
-	if err != nil {
-		t.Fatalf("fetchLatestRelease() error = %v", err)
-	}
-	if client.repo != defaultGitHubRepo {
-		t.Fatalf("FetchLatestRelease repo = %q, want %q", client.repo, defaultGitHubRepo)
-	}
+
+	require.NoError(t, err)
+	require.Equal(t, defaultGitHubRepo, client.repo)
+}
+
+func TestUpdateServicePerformUpdateNoUpdateReturnsSentinel(t *testing.T) {
+	svc := NewUpdateService(
+		&updateServiceCacheStub{},
+		&updateServiceGitHubClientStub{
+			release: &GitHubRelease{
+				TagName: "v0.1.132",
+				Name:    "v0.1.132",
+			},
+		},
+		"0.1.132",
+		"release",
+		"",
+	)
+
+	err := svc.PerformUpdate(context.Background())
+
+	require.Error(t, err)
+	require.True(t, errors.Is(err, ErrNoUpdateAvailable))
+	require.ErrorIs(t, err, ErrNoUpdateAvailable)
 }
