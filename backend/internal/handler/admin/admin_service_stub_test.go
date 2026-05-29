@@ -310,13 +310,13 @@ func (s *stubAdminService) BatchSetGroupRPMOverrides(_ context.Context, _ int64,
 	return nil
 }
 
-func (s *stubAdminService) ListAccounts(ctx context.Context, page, pageSize int, platform, accountType, status, search string, groupID int64, privacyMode string, sortBy, sortOrder string) ([]service.Account, int64, error) {
-	s.lastListAccounts.platform = platform
-	s.lastListAccounts.accountType = accountType
-	s.lastListAccounts.status = status
-	s.lastListAccounts.search = search
-	s.lastListAccounts.groupID = groupID
-	s.lastListAccounts.privacyMode = privacyMode
+func (s *stubAdminService) ListAccounts(ctx context.Context, page, pageSize int, filters service.AccountListFilters, sortBy, sortOrder string) ([]service.Account, int64, error) {
+	s.lastListAccounts.platform = filters.Platform
+	s.lastListAccounts.accountType = filters.Type
+	s.lastListAccounts.status = filters.Status
+	s.lastListAccounts.search = filters.Search
+	s.lastListAccounts.groupID = filters.GroupID
+	s.lastListAccounts.privacyMode = filters.PrivacyMode
 	s.lastListAccounts.sortBy = sortBy
 	s.lastListAccounts.sortOrder = sortOrder
 	s.lastListAccounts.calls++
@@ -362,6 +362,10 @@ func (s *stubAdminService) UpdateAccountExtra(ctx context.Context, id int64, upd
 
 func (s *stubAdminService) DeleteAccount(ctx context.Context, id int64) error {
 	return nil
+}
+
+func (s *stubAdminService) BulkDeleteAccounts(ctx context.Context, input *service.BulkDeleteAccountsInput) (*service.BulkDeleteAccountsResult, error) {
+	return &service.BulkDeleteAccountsResult{}, nil
 }
 
 func (s *stubAdminService) RefreshAccountCredentials(ctx context.Context, id int64) (*service.Account, error) {

@@ -39,6 +39,8 @@ export async function list(
     group?: string
     search?: string
     privacy_mode?: string
+    cleanup_status?: string
+    integration_source?: string
     lite?: string
     sort_by?: string
     sort_order?: 'asc' | 'desc'
@@ -74,6 +76,8 @@ export async function listWithEtag(
     group?: string
     search?: string
     privacy_mode?: string
+    cleanup_status?: string
+    integration_source?: string
     lite?: string
     sort_by?: string
     sort_order?: 'asc' | 'desc'
@@ -163,6 +167,26 @@ export async function checkMixedChannelRisk(
  */
 export async function deleteAccount(id: number): Promise<{ message: string }> {
   const { data } = await apiClient.delete<{ message: string }>(`/admin/accounts/${id}`)
+  return data
+}
+
+export async function bulkDelete(payload: {
+  account_ids?: number[]
+  filters?: Record<string, unknown>
+}): Promise<{
+  success: number
+  failed: number
+  success_ids?: number[]
+  failed_ids?: number[]
+  results: Array<{ account_id: number; success: boolean; error?: string }>
+}> {
+  const { data } = await apiClient.post<{
+    success: number
+    failed: number
+    success_ids?: number[]
+    failed_ids?: number[]
+    results: Array<{ account_id: number; success: boolean; error?: string }>
+  }>('/admin/accounts/bulk-delete', payload)
   return data
 }
 
@@ -686,6 +710,7 @@ export const accountsAPI = {
   update,
   checkMixedChannelRisk,
   delete: deleteAccount,
+  bulkDelete,
   toggleStatus,
   testAccount,
   refreshCredentials,

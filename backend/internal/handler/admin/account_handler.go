@@ -112,6 +112,62 @@ type CreateAccountRequest struct {
 	ConfirmMixedChannelRisk *bool          `json:"confirm_mixed_channel_risk"` // 用户确认混合渠道风险
 }
 
+type IntegrationCreateAccountRequest struct {
+	Name               string         `json:"name" binding:"required"`
+	Notes              *string        `json:"notes"`
+	Platform           string         `json:"platform" binding:"required,oneof=anthropic openai gemini antigravity"`
+	GroupIDs           []int64        `json:"group_ids"`
+	ProxyID            *int64         `json:"proxy_id"`
+	Concurrency        int            `json:"concurrency"`
+	LoadFactor         *int           `json:"load_factor"`
+	Priority           int            `json:"priority"`
+	RateMultiplier     *float64       `json:"rate_multiplier"`
+	ExpiresAt          *int64         `json:"expires_at"`
+	AutoPauseOnExpired *bool          `json:"auto_pause_on_expired"`
+	ExternalID         string         `json:"external_id"`
+	APIKey             string         `json:"api_key" binding:"required"`
+	BaseURL            string         `json:"base_url"`
+	TierID             string         `json:"tier_id"`
+	ModelRestriction   map[string]any `json:"model_restriction"`
+	OpenAI             struct {
+		CompactModelMapping map[string]any `json:"compact_model_mapping"`
+		Passthrough         *bool          `json:"passthrough"`
+		WSMode              string         `json:"ws_mode"`
+		CompactMode         string         `json:"compact_mode"`
+		ResponsesMode       string         `json:"responses_mode"`
+	} `json:"openai"`
+	Anthropic struct {
+		Passthrough        *bool  `json:"passthrough"`
+		WebSearchEmulation string `json:"web_search_emulation"`
+	} `json:"anthropic"`
+	PoolMode                 *bool `json:"pool_mode"`
+	PoolModeRetryCount       *int  `json:"pool_mode_retry_count"`
+	PoolModeRetryStatusCodes []int `json:"pool_mode_retry_status_codes"`
+	CustomErrorCodes         []int `json:"custom_error_codes"`
+	TempUnschedulable        *struct {
+		Enabled *bool                           `json:"enabled"`
+		Rules   []service.TempUnschedulableRule `json:"rules"`
+	} `json:"temp_unschedulable"`
+	InterceptWarmupRequests *bool `json:"intercept_warmup_requests"`
+	Quota                   *struct {
+		TotalLimit            *float64 `json:"total_limit"`
+		DailyLimit            *float64 `json:"daily_limit"`
+		WeeklyLimit           *float64 `json:"weekly_limit"`
+		DailyResetMode        string   `json:"daily_reset_mode"`
+		DailyResetHour        *int     `json:"daily_reset_hour"`
+		WeeklyResetMode       string   `json:"weekly_reset_mode"`
+		WeeklyResetDay        *int     `json:"weekly_reset_day"`
+		WeeklyResetHour       *int     `json:"weekly_reset_hour"`
+		ResetTimezone         string   `json:"reset_timezone"`
+		NotifyDailyEnabled    *bool    `json:"notify_daily_enabled"`
+		NotifyDailyThreshold  *float64 `json:"notify_daily_threshold"`
+		NotifyWeeklyEnabled   *bool    `json:"notify_weekly_enabled"`
+		NotifyWeeklyThreshold *float64 `json:"notify_weekly_threshold"`
+		NotifyTotalEnabled    *bool    `json:"notify_total_enabled"`
+		NotifyTotalThreshold  *float64 `json:"notify_total_threshold"`
+	} `json:"quota"`
+}
+
 // UpdateAccountRequest represents update account request
 // 使用指针类型来区分"未提供"和"设置为0"
 type UpdateAccountRequest struct {
@@ -150,13 +206,20 @@ type BulkUpdateAccountsRequest struct {
 	ConfirmMixedChannelRisk *bool                     `json:"confirm_mixed_channel_risk"` // 用户确认混合渠道风险
 }
 
+type BulkDeleteAccountsRequest struct {
+	AccountIDs []int64                   `json:"account_ids"`
+	Filters    *BulkUpdateAccountFilters `json:"filters"`
+}
+
 type BulkUpdateAccountFilters struct {
-	Platform    string `json:"platform"`
-	Type        string `json:"type"`
-	Status      string `json:"status"`
-	Group       string `json:"group"`
-	Search      string `json:"search"`
-	PrivacyMode string `json:"privacy_mode"`
+	Platform          string `json:"platform"`
+	Type              string `json:"type"`
+	Status            string `json:"status"`
+	Group             string `json:"group"`
+	Search            string `json:"search"`
+	PrivacyMode       string `json:"privacy_mode"`
+	CleanupStatus     string `json:"cleanup_status"`
+	IntegrationSource string `json:"integration_source"`
 }
 
 // CheckMixedChannelRequest represents check mixed channel risk request
@@ -258,7 +321,16 @@ func (h *AccountHandler) List(c *gin.Context) {
 		}
 	}
 
-	accounts, total, err := h.adminService.ListAccounts(c.Request.Context(), page, pageSize, platform, accountType, status, search, groupID, privacyMode, sortBy, sortOrder)
+	accounts, total, err := h.adminService.ListAccounts(c.Request.Context(), page, pageSize, service.AccountListFilters{
+		Platform:          platform,
+		Type:              accountType,
+		Status:            status,
+		Search:            search,
+		GroupID:           groupID,
+		PrivacyMode:       privacyMode,
+		CleanupStatus:     strings.TrimSpace(c.Query("cleanup_status")),
+		IntegrationSource: strings.TrimSpace(c.Query("integration_source")),
+	}, sortBy, sortOrder)
 	if err != nil {
 		response.ErrorFrom(c, err)
 		return
@@ -380,7 +452,9 @@ func (h *AccountHandler) List(c *gin.Context) {
 		result[i] = item
 	}
 
-	etag := buildAccountsListETag(result, total, page, pageSize, platform, accountType, status, search, lite)
+	cleanupStatus := strings.TrimSpace(c.Query("cleanup_status"))
+	integrationSource := strings.TrimSpace(c.Query("integration_source"))
+	etag := buildAccountsListETag(result, total, page, pageSize, platform, accountType, status, search, cleanupStatus, integrationSource, lite)
 	if etag != "" {
 		c.Header("ETag", etag)
 		c.Header("Vary", "If-None-Match")
@@ -397,7 +471,7 @@ func buildAccountsListETag(
 	items []AccountWithConcurrency,
 	total int64,
 	page, pageSize int,
-	platform, accountType, status, search string,
+	platform, accountType, status, search, cleanupStatus, integrationSource string,
 	lite bool,
 ) string {
 	payload := struct {
@@ -408,6 +482,8 @@ func buildAccountsListETag(
 		AccountType string                   `json:"type"`
 		Status      string                   `json:"status"`
 		Search      string                   `json:"search"`
+		Cleanup     string                   `json:"cleanup_status"`
+		Integration string                   `json:"integration_source"`
 		Lite        bool                     `json:"lite"`
 		Items       []AccountWithConcurrency `json:"items"`
 	}{
@@ -418,6 +494,8 @@ func buildAccountsListETag(
 		AccountType: accountType,
 		Status:      status,
 		Search:      search,
+		Cleanup:     cleanupStatus,
+		Integration: integrationSource,
 		Lite:        lite,
 		Items:       items,
 	}
@@ -588,6 +666,55 @@ func (h *AccountHandler) Create(c *gin.Context) {
 	response.Success(c, result.Data)
 }
 
+func (h *AccountHandler) ListIntegrationGroups(c *gin.Context) {
+	platform := strings.TrimSpace(c.Query("platform"))
+	if platform == "" {
+		response.ErrorFrom(c, infraerrors.BadRequest("INVALID_PLATFORM", "platform is required"))
+		return
+	}
+	groups, err := h.adminService.GetAllGroupsByPlatform(c.Request.Context(), platform)
+	if err != nil {
+		response.ErrorFrom(c, err)
+		return
+	}
+	out := make([]*dto.Group, 0, len(groups))
+	for i := range groups {
+		if groups[i].Status != service.StatusActive {
+			continue
+		}
+		out = append(out, dto.GroupFromService(&groups[i]))
+	}
+	response.Success(c, out)
+}
+
+func (h *AccountHandler) CreateIntegrationAccount(c *gin.Context) {
+	var req IntegrationCreateAccountRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		response.BadRequest(c, "Invalid request: "+err.Error())
+		return
+	}
+	input, err := buildIntegrationCreateAccountInput(req)
+	if err != nil {
+		response.ErrorFrom(c, err)
+		return
+	}
+	account, err := h.adminService.CreateAccount(c.Request.Context(), input)
+	if err != nil {
+		var mixedErr *service.MixedChannelError
+		if errors.As(err, &mixedErr) {
+			c.JSON(409, gin.H{
+				"error":   "mixed_channel_warning",
+				"message": mixedErr.Error(),
+			})
+			return
+		}
+		response.ErrorFrom(c, err)
+		return
+	}
+	h.scheduleOpenAIResponsesProbe(account)
+	response.Success(c, h.buildAccountResponseWithRuntime(c.Request.Context(), account))
+}
+
 // Update handles updating an account
 // PUT /api/v1/admin/accounts/:id
 func (h *AccountHandler) Update(c *gin.Context) {
@@ -678,6 +805,174 @@ func (h *AccountHandler) scheduleOpenAIResponsesProbe(account *service.Account) 
 	}()
 }
 
+func buildIntegrationCreateAccountInput(req IntegrationCreateAccountRequest) (*service.CreateAccountInput, error) {
+	platform := strings.TrimSpace(req.Platform)
+	if platform == "" {
+		return nil, infraerrors.BadRequest("INVALID_PLATFORM", "platform is required")
+	}
+	apiKey := strings.TrimSpace(req.APIKey)
+	if apiKey == "" {
+		return nil, infraerrors.BadRequest("INVALID_API_KEY", "api_key is required")
+	}
+	if req.RateMultiplier != nil && *req.RateMultiplier < 0 {
+		return nil, infraerrors.BadRequest("INVALID_RATE_MULTIPLIER", "rate_multiplier must be >= 0")
+	}
+
+	credentials := map[string]any{"api_key": apiKey}
+	if baseURL := strings.TrimSpace(req.BaseURL); baseURL != "" {
+		credentials["base_url"] = baseURL
+	}
+	if platform == service.PlatformGemini {
+		if tierID := strings.TrimSpace(req.TierID); tierID != "" {
+			credentials["tier_id"] = tierID
+		}
+	}
+	if len(req.ModelRestriction) > 0 {
+		credentials["model_mapping"] = req.ModelRestriction
+	}
+	if platform == service.PlatformOpenAI && len(req.OpenAI.CompactModelMapping) > 0 {
+		credentials["compact_model_mapping"] = req.OpenAI.CompactModelMapping
+	}
+	if req.PoolMode != nil {
+		credentials["pool_mode"] = *req.PoolMode
+	}
+	if req.PoolModeRetryCount != nil {
+		credentials["pool_mode_retry_count"] = *req.PoolModeRetryCount
+	}
+	if len(req.PoolModeRetryStatusCodes) > 0 {
+		credentials["pool_mode_retry_status_codes"] = req.PoolModeRetryStatusCodes
+	}
+	if len(req.CustomErrorCodes) > 0 {
+		credentials["custom_error_codes_enabled"] = true
+		credentials["custom_error_codes"] = req.CustomErrorCodes
+	}
+	if req.TempUnschedulable != nil {
+		enabled := true
+		if req.TempUnschedulable.Enabled != nil {
+			enabled = *req.TempUnschedulable.Enabled
+		}
+		credentials["temp_unschedulable_enabled"] = enabled
+		if len(req.TempUnschedulable.Rules) > 0 {
+			credentials["temp_unschedulable_rules"] = req.TempUnschedulable.Rules
+		}
+	}
+	if req.InterceptWarmupRequests != nil {
+		credentials["intercept_warmup_requests"] = *req.InterceptWarmupRequests
+	}
+
+	extra := map[string]any{"integration_source": "admin_api"}
+	if externalID := strings.TrimSpace(req.ExternalID); externalID != "" {
+		extra["integration_external_id"] = externalID
+	}
+	if platform == service.PlatformOpenAI {
+		if req.OpenAI.Passthrough != nil {
+			extra["openai_passthrough"] = *req.OpenAI.Passthrough
+		}
+		if mode := strings.TrimSpace(req.OpenAI.WSMode); mode != "" {
+			extra["openai_apikey_responses_websockets_v2_mode"] = mode
+		}
+		if mode := strings.TrimSpace(req.OpenAI.CompactMode); mode != "" && mode != "auto" {
+			extra["openai_compact_mode"] = mode
+		}
+		if mode := strings.TrimSpace(req.OpenAI.ResponsesMode); mode != "" && mode != "auto" {
+			extra["openai_responses_mode"] = mode
+		}
+	}
+	if platform == service.PlatformAnthropic {
+		if req.Anthropic.Passthrough != nil {
+			extra["anthropic_passthrough"] = *req.Anthropic.Passthrough
+		}
+		if mode := strings.TrimSpace(req.Anthropic.WebSearchEmulation); mode != "" {
+			extra["web_search_emulation"] = mode
+		}
+	}
+	applyIntegrationQuota(extra, req.Quota)
+
+	return &service.CreateAccountInput{
+		Name:               strings.TrimSpace(req.Name),
+		Notes:              req.Notes,
+		Platform:           platform,
+		Type:               service.AccountTypeAPIKey,
+		Credentials:        credentials,
+		Extra:              extra,
+		ProxyID:            req.ProxyID,
+		Concurrency:        req.Concurrency,
+		Priority:           req.Priority,
+		RateMultiplier:     req.RateMultiplier,
+		LoadFactor:         req.LoadFactor,
+		GroupIDs:           req.GroupIDs,
+		ExpiresAt:          req.ExpiresAt,
+		AutoPauseOnExpired: req.AutoPauseOnExpired,
+	}, nil
+}
+
+func applyIntegrationQuota(extra map[string]any, quota *struct {
+	TotalLimit            *float64 `json:"total_limit"`
+	DailyLimit            *float64 `json:"daily_limit"`
+	WeeklyLimit           *float64 `json:"weekly_limit"`
+	DailyResetMode        string   `json:"daily_reset_mode"`
+	DailyResetHour        *int     `json:"daily_reset_hour"`
+	WeeklyResetMode       string   `json:"weekly_reset_mode"`
+	WeeklyResetDay        *int     `json:"weekly_reset_day"`
+	WeeklyResetHour       *int     `json:"weekly_reset_hour"`
+	ResetTimezone         string   `json:"reset_timezone"`
+	NotifyDailyEnabled    *bool    `json:"notify_daily_enabled"`
+	NotifyDailyThreshold  *float64 `json:"notify_daily_threshold"`
+	NotifyWeeklyEnabled   *bool    `json:"notify_weekly_enabled"`
+	NotifyWeeklyThreshold *float64 `json:"notify_weekly_threshold"`
+	NotifyTotalEnabled    *bool    `json:"notify_total_enabled"`
+	NotifyTotalThreshold  *float64 `json:"notify_total_threshold"`
+}) {
+	if extra == nil || quota == nil {
+		return
+	}
+	if quota.TotalLimit != nil {
+		extra["quota_limit"] = *quota.TotalLimit
+	}
+	if quota.DailyLimit != nil {
+		extra["quota_daily_limit"] = *quota.DailyLimit
+	}
+	if quota.WeeklyLimit != nil {
+		extra["quota_weekly_limit"] = *quota.WeeklyLimit
+	}
+	if mode := strings.TrimSpace(quota.DailyResetMode); mode != "" {
+		extra["quota_daily_reset_mode"] = mode
+	}
+	if quota.DailyResetHour != nil {
+		extra["quota_daily_reset_hour"] = *quota.DailyResetHour
+	}
+	if mode := strings.TrimSpace(quota.WeeklyResetMode); mode != "" {
+		extra["quota_weekly_reset_mode"] = mode
+	}
+	if quota.WeeklyResetDay != nil {
+		extra["quota_weekly_reset_day"] = *quota.WeeklyResetDay
+	}
+	if quota.WeeklyResetHour != nil {
+		extra["quota_weekly_reset_hour"] = *quota.WeeklyResetHour
+	}
+	if tz := strings.TrimSpace(quota.ResetTimezone); tz != "" {
+		extra["quota_reset_timezone"] = tz
+	}
+	if quota.NotifyDailyEnabled != nil {
+		extra["quota_notify_daily_enabled"] = *quota.NotifyDailyEnabled
+	}
+	if quota.NotifyDailyThreshold != nil {
+		extra["quota_notify_daily_threshold"] = *quota.NotifyDailyThreshold
+	}
+	if quota.NotifyWeeklyEnabled != nil {
+		extra["quota_notify_weekly_enabled"] = *quota.NotifyWeeklyEnabled
+	}
+	if quota.NotifyWeeklyThreshold != nil {
+		extra["quota_notify_weekly_threshold"] = *quota.NotifyWeeklyThreshold
+	}
+	if quota.NotifyTotalEnabled != nil {
+		extra["quota_notify_total_enabled"] = *quota.NotifyTotalEnabled
+	}
+	if quota.NotifyTotalThreshold != nil {
+		extra["quota_notify_total_threshold"] = *quota.NotifyTotalThreshold
+	}
+}
+
 // Delete handles deleting an account
 // DELETE /api/v1/admin/accounts/:id
 func (h *AccountHandler) Delete(c *gin.Context) {
@@ -694,6 +989,31 @@ func (h *AccountHandler) Delete(c *gin.Context) {
 	}
 
 	response.Success(c, gin.H{"message": "Account deleted successfully"})
+}
+
+// BulkDelete handles deleting selected accounts or the current filtered account set.
+// POST /api/v1/admin/accounts/bulk-delete
+func (h *AccountHandler) BulkDelete(c *gin.Context) {
+	var req BulkDeleteAccountsRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		response.BadRequest(c, "Invalid request: "+err.Error())
+		return
+	}
+	if len(req.AccountIDs) == 0 && req.Filters == nil {
+		response.BadRequest(c, "account_ids or filters is required")
+		return
+	}
+
+	result, err := h.adminService.BulkDeleteAccounts(c.Request.Context(), &service.BulkDeleteAccountsInput{
+		AccountIDs: req.AccountIDs,
+		Filters:    toServiceBulkUpdateAccountFilters(req.Filters),
+	})
+	if err != nil {
+		response.ErrorFrom(c, err)
+		return
+	}
+
+	response.Success(c, result)
 }
 
 // TestAccountRequest represents the request body for testing an account
@@ -1583,12 +1903,14 @@ func toServiceBulkUpdateAccountFilters(filters *BulkUpdateAccountFilters) *servi
 		return nil
 	}
 	return &service.BulkUpdateAccountFilters{
-		Platform:    filters.Platform,
-		Type:        filters.Type,
-		Status:      filters.Status,
-		Group:       filters.Group,
-		Search:      filters.Search,
-		PrivacyMode: filters.PrivacyMode,
+		Platform:          filters.Platform,
+		Type:              filters.Type,
+		Status:            filters.Status,
+		Group:             filters.Group,
+		Search:            filters.Search,
+		PrivacyMode:       filters.PrivacyMode,
+		CleanupStatus:     filters.CleanupStatus,
+		IntegrationSource: filters.IntegrationSource,
 	}
 }
 
@@ -2244,7 +2566,10 @@ func (h *AccountHandler) BatchRefreshTier(c *gin.Context) {
 	accounts := make([]*service.Account, 0)
 
 	if len(req.AccountIDs) == 0 {
-		allAccounts, _, err := h.adminService.ListAccounts(ctx, 1, 10000, "gemini", "oauth", "", "", 0, "", "name", "asc")
+		allAccounts, _, err := h.adminService.ListAccounts(ctx, 1, 10000, service.AccountListFilters{
+			Platform: service.PlatformGemini,
+			Type:     service.AccountTypeOAuth,
+		}, "name", "asc")
 		if err != nil {
 			response.ErrorFrom(c, err)
 			return

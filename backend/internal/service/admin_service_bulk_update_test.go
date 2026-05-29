@@ -88,15 +88,15 @@ func (s *accountRepoStubForBulkUpdate) ListByGroup(_ context.Context, groupID in
 	return nil, nil
 }
 
-func (s *accountRepoStubForBulkUpdate) ListWithFilters(_ context.Context, params pagination.PaginationParams, platform, accountType, status, search string, groupID int64, privacyMode string) ([]Account, *pagination.PaginationResult, error) {
+func (s *accountRepoStubForBulkUpdate) ListWithFilters(_ context.Context, params pagination.PaginationParams, filters AccountListFilters) ([]Account, *pagination.PaginationResult, error) {
 	s.listCalled = true
 	s.lastListParams = params
-	s.lastListFilters.platform = platform
-	s.lastListFilters.accountType = accountType
-	s.lastListFilters.status = status
-	s.lastListFilters.search = search
-	s.lastListFilters.groupID = groupID
-	s.lastListFilters.privacyMode = privacyMode
+	s.lastListFilters.platform = filters.Platform
+	s.lastListFilters.accountType = filters.Type
+	s.lastListFilters.status = filters.Status
+	s.lastListFilters.search = filters.Search
+	s.lastListFilters.groupID = filters.GroupID
+	s.lastListFilters.privacyMode = filters.PrivacyMode
 	if s.listErr != nil {
 		return nil, nil, s.listErr
 	}

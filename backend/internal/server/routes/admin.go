@@ -275,6 +275,12 @@ func registerGroupRoutes(admin *gin.RouterGroup, h *handler.Handlers) {
 }
 
 func registerAccountRoutes(admin *gin.RouterGroup, h *handler.Handlers) {
+	integration := admin.Group("/integration")
+	{
+		integration.GET("/groups", h.Admin.Account.ListIntegrationGroups)
+		integration.POST("/accounts", h.Admin.Account.CreateIntegrationAccount)
+	}
+
 	accounts := admin.Group("/accounts")
 	{
 		accounts.GET("", h.Admin.Account.List)
@@ -310,6 +316,7 @@ func registerAccountRoutes(admin *gin.RouterGroup, h *handler.Handlers) {
 		accounts.POST("/batch-update-credentials", h.Admin.Account.BatchUpdateCredentials)
 		accounts.POST("/batch-refresh-tier", h.Admin.Account.BatchRefreshTier)
 		accounts.POST("/bulk-update", h.Admin.Account.BulkUpdate)
+		accounts.POST("/bulk-delete", h.Admin.Account.BulkDelete)
 		accounts.POST("/batch-clear-error", h.Admin.Account.BatchClearError)
 		accounts.POST("/batch-refresh", h.Admin.Account.BatchRefresh)
 

@@ -768,6 +768,29 @@ func (s *RateLimitService) handleOpenAI403(ctx context.Context, account *Account
 		"account may be suspended or lack permissions",
 	)
 
+	if isOpenAIInsufficientQuota403(upstreamMsg, responseBody) {
+		reason := buildForbiddenErrorMessage(
+			"OpenAI quota exhausted (403):",
+			upstreamMsg,
+			responseBody,
+			"insufficient balance or quota exhausted",
+		)
+		if err := s.accountRepo.UpdateExtra(ctx, account.ID, map[string]any{
+			"cleanup_status": "pending",
+			"cleanup_reason": reason,
+		}); err != nil {
+			slog.Warn("openai_403_cleanup_mark_failed", "account_id", account.ID, "error", err)
+		}
+		if err := s.accountRepo.SetSchedulable(ctx, account.ID, false); err != nil {
+			slog.Warn("openai_403_set_unschedulable_failed", "account_id", account.ID, "error", err)
+			s.handleAuthError(ctx, account, reason)
+			return true
+		}
+		s.notifyAccountSchedulingBlocked(account, time.Now().Add(24*time.Hour), "openai_403_quota_exhausted")
+		slog.Warn("openai_403_quota_exhausted_cleanup_pending", "account_id", account.ID)
+		return true
+	}
+
 	if s.openAI403CounterCache == nil {
 		s.handleAuthError(ctx, account, msg)
 		return true
@@ -803,6 +826,33 @@ func (s *RateLimitService) handleOpenAI403(ctx context.Context, account *Account
 		"threshold", openAI403DisableThreshold,
 	)
 	return true
+}
+
+func isOpenAIInsufficientQuota403(upstreamMsg string, responseBody []byte) bool {
+	text := strings.ToLower(strings.TrimSpace(upstreamMsg + " " + string(responseBody)))
+	if text == "" {
+		return false
+	}
+	markers := []string{
+		"insufficient_quota",
+		"insufficient quota",
+		"insufficient balance",
+		"insufficient account balance",
+		"quota exceeded",
+		"quota exhausted",
+		"billing hard limit",
+		"billing issue",
+		"payment required",
+		"credit balance is too low",
+		"you exceeded your current quota",
+		"usage quota",
+	}
+	for _, marker := range markers {
+		if strings.Contains(text, marker) {
+			return true
+		}
+	}
+	return false
 }
 
 // handleAntigravity403 处理 Antigravity 平台的 403 错误

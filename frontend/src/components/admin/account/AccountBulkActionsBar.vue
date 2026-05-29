@@ -35,11 +35,14 @@
       <button @click="$emit('edit-filtered')" class="btn btn-primary btn-sm">
         {{ t('admin.accounts.bulkEdit.submit') }}
       </button>
+      <button @click="$emit('delete-filtered')" class="btn btn-danger btn-sm">
+        {{ t('admin.accounts.bulkActions.deleteFiltered') }}
+      </button>
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
 import { useI18n } from 'vue-i18n'
-defineProps(['selectedIds']); defineEmits(['delete', 'edit-selected', 'edit-filtered', 'clear', 'select-page', 'toggle-schedulable', 'reset-status', 'refresh-token']); const { t } = useI18n()
+defineProps(['selectedIds']); defineEmits(['delete', 'delete-filtered', 'edit-selected', 'edit-filtered', 'clear', 'select-page', 'toggle-schedulable', 'reset-status', 'refresh-token']); const { t } = useI18n()
 </script>

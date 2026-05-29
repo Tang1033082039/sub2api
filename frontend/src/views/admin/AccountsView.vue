@@ -175,6 +175,7 @@
         <AccountBulkActionsBar
           :selected-ids="selIds"
           @delete="handleBulkDelete"
+          @delete-filtered="handleBulkDeleteFiltered"
           @reset-status="handleBulkResetStatus"
           @refresh-token="handleBulkRefreshToken"
           @edit-selected="openBulkEditSelected"
@@ -440,6 +441,8 @@ type AccountBulkEditTarget =
         group?: string
         search?: string
         privacy_mode?: string
+        cleanup_status?: string
+        integration_source?: string
         sort_by?: string
         sort_order?: AccountSortOrder
       }
@@ -730,6 +733,8 @@ const {
     type: '',
     status: '',
     privacy_mode: '',
+    cleanup_status: '',
+    integration_source: '',
     group: '',
     search: '',
     sort_by: sortState.sort_by,
@@ -1207,7 +1212,47 @@ const toggleSelectAllVisible = (event: Event) => {
   const target = event.target as HTMLInputElement
   toggleVisible(target.checked)
 }
-const handleBulkDelete = async () => { if(!confirm(t('common.confirm'))) return; try { await Promise.all(selIds.value.map(id => adminAPI.accounts.delete(id))); clearSelection(); reload() } catch (error) { console.error('Failed to bulk delete accounts:', error) } }
+const handleBulkDelete = async () => {
+  const accountIds = [...selIds.value]
+  if (accountIds.length === 0) return
+  if (!confirm(t('admin.accounts.bulkDeleteConfirm', { count: accountIds.length }))) return
+  try {
+    const result = await adminAPI.accounts.bulkDelete({ account_ids: accountIds })
+    if (result.failed > 0) {
+      appStore.showError(t('admin.accounts.bulkDeletePartial', { success: result.success, failed: result.failed }))
+      setSelectedIds(result.failed_ids?.length ? result.failed_ids : accountIds)
+    } else {
+      appStore.showSuccess(t('admin.accounts.bulkDeleteSuccess', { count: result.success }))
+      clearSelection()
+    }
+    reload()
+  } catch (error) {
+    console.error('Failed to bulk delete accounts:', error)
+    appStore.showError(t('admin.accounts.bulkDeleteFailed'))
+  }
+}
+const handleBulkDeleteFiltered = async () => {
+  const filters = buildBulkEditFilterSnapshot()
+  const preview = await adminAPI.accounts.list(1, 1, filters)
+  if (preview.total <= 0) {
+    appStore.showError(t('admin.accounts.bulkActions.noFilteredAccounts'))
+    return
+  }
+  if (!confirm(t('admin.accounts.bulkDeleteFilteredConfirm', { count: preview.total }))) return
+  try {
+    const result = await adminAPI.accounts.bulkDelete({ filters })
+    if (result.failed > 0) {
+      appStore.showError(t('admin.accounts.bulkDeletePartial', { success: result.success, failed: result.failed }))
+    } else {
+      appStore.showSuccess(t('admin.accounts.bulkDeleteSuccess', { count: result.success }))
+      clearSelection()
+    }
+    reload()
+  } catch (error) {
+    console.error('Failed to bulk delete filtered accounts:', error)
+    appStore.showError(t('admin.accounts.bulkDeleteFailed'))
+  }
+}
 const handleBulkResetStatus = async () => {
   if (!confirm(t('common.confirm'))) return
   try {
@@ -1352,6 +1397,8 @@ const buildBulkEditFilterSnapshot = () => {
     group: typeof rawParams.group === 'string' ? rawParams.group : '',
     search: typeof rawParams.search === 'string' ? rawParams.search : '',
     privacy_mode: typeof rawParams.privacy_mode === 'string' ? rawParams.privacy_mode : '',
+    cleanup_status: typeof rawParams.cleanup_status === 'string' ? rawParams.cleanup_status : '',
+    integration_source: typeof rawParams.integration_source === 'string' ? rawParams.integration_source : '',
     sort_by: typeof rawParams.sort_by === 'string' ? rawParams.sort_by : '',
     sort_order: sortOrder
   }
@@ -1402,6 +1449,8 @@ const buildAccountQueryFilters = () => ({
   status: params.status || '',
   group: params.group || '',
   privacy_mode: params.privacy_mode || '',
+  cleanup_status: params.cleanup_status || '',
+  integration_source: params.integration_source || '',
   search: params.search || '',
   sort_by: sortState.sort_by,
   sort_order: sortState.sort_order
@@ -1444,6 +1493,14 @@ const accountMatchesCurrentFilters = (account: Account) => {
     } else if (privacyMode !== filters.privacy_mode) {
       return false
     }
+  }
+  if (filters.cleanup_status) {
+    const cleanupStatus = typeof account.extra?.cleanup_status === 'string' ? account.extra.cleanup_status : ''
+    if (cleanupStatus !== filters.cleanup_status) return false
+  }
+  if (filters.integration_source) {
+    const integrationSource = typeof account.extra?.integration_source === 'string' ? account.extra.integration_source : ''
+    if (integrationSource !== filters.integration_source) return false
   }
   const search = String(filters.search || '').trim().toLowerCase()
   if (search && !account.name.toLowerCase().includes(search)) return false

@@ -72,7 +72,7 @@ type AdminService interface {
 	ReplaceUserGroup(ctx context.Context, userID, oldGroupID, newGroupID int64) (*ReplaceUserGroupResult, error)
 
 	// Account management
-	ListAccounts(ctx context.Context, page, pageSize int, platform, accountType, status, search string, groupID int64, privacyMode string, sortBy, sortOrder string) ([]Account, int64, error)
+	ListAccounts(ctx context.Context, page, pageSize int, filters AccountListFilters, sortBy, sortOrder string) ([]Account, int64, error)
 	GetAccount(ctx context.Context, id int64) (*Account, error)
 	GetAccountsByIDs(ctx context.Context, ids []int64) ([]*Account, error)
 	CreateAccount(ctx context.Context, input *CreateAccountInput) (*Account, error)
@@ -81,6 +81,7 @@ type AdminService interface {
 	// 用于刷新流程持久化 account_uuid / org_uuid 等少量键，避免被全量快照覆盖。
 	UpdateAccountExtra(ctx context.Context, id int64, updates map[string]any) error
 	DeleteAccount(ctx context.Context, id int64) error
+	BulkDeleteAccounts(ctx context.Context, input *BulkDeleteAccountsInput) (*BulkDeleteAccountsResult, error)
 	RefreshAccountCredentials(ctx context.Context, id int64) (*Account, error)
 	ClearAccountError(ctx context.Context, id int64) (*Account, error)
 	SetAccountError(ctx context.Context, id int64, errorMsg string) error
@@ -329,12 +330,33 @@ type BulkUpdateAccountsInput struct {
 }
 
 type BulkUpdateAccountFilters struct {
-	Platform    string
-	Type        string
-	Status      string
-	Group       string
-	Search      string
-	PrivacyMode string
+	Platform          string
+	Type              string
+	Status            string
+	Group             string
+	Search            string
+	PrivacyMode       string
+	CleanupStatus     string
+	IntegrationSource string
+}
+
+type BulkDeleteAccountsInput struct {
+	AccountIDs []int64
+	Filters    *BulkUpdateAccountFilters
+}
+
+type BulkDeleteAccountsResult struct {
+	Success    int                       `json:"success"`
+	Failed     int                       `json:"failed"`
+	SuccessIDs []int64                   `json:"success_ids"`
+	FailedIDs  []int64                   `json:"failed_ids"`
+	Results    []BulkDeleteAccountResult `json:"results"`
+}
+
+type BulkDeleteAccountResult struct {
+	AccountID int64  `json:"account_id"`
+	Success   bool   `json:"success"`
+	Error     string `json:"error,omitempty"`
 }
 
 // BulkUpdateAccountResult captures the result for a single account update.
@@ -2419,9 +2441,9 @@ func (s *adminServiceImpl) ReplaceUserGroup(ctx context.Context, userID, oldGrou
 }
 
 // Account management implementations
-func (s *adminServiceImpl) ListAccounts(ctx context.Context, page, pageSize int, platform, accountType, status, search string, groupID int64, privacyMode string, sortBy, sortOrder string) ([]Account, int64, error) {
+func (s *adminServiceImpl) ListAccounts(ctx context.Context, page, pageSize int, filters AccountListFilters, sortBy, sortOrder string) ([]Account, int64, error) {
 	params := pagination.PaginationParams{Page: page, PageSize: pageSize, SortBy: sortBy, SortOrder: sortOrder}
-	accounts, result, err := s.accountRepo.ListWithFilters(ctx, params, platform, accountType, status, search, groupID, privacyMode)
+	accounts, result, err := s.accountRepo.ListWithFilters(ctx, params, filters)
 	if err != nil {
 		return nil, 0, err
 	}
@@ -2865,6 +2887,11 @@ func (s *adminServiceImpl) resolveBulkUpdateTargetIDs(ctx context.Context, filte
 		return nil, nil
 	}
 
+	accountFilters, err := bulkUpdateFiltersToAccountListFilters(filters)
+	if err != nil {
+		return nil, err
+	}
+
 	groupID := int64(0)
 	switch strings.TrimSpace(filters.Group) {
 	case "":
@@ -2877,6 +2904,7 @@ func (s *adminServiceImpl) resolveBulkUpdateTargetIDs(ctx context.Context, filte
 		}
 		groupID = parsedGroupID
 	}
+	accountFilters.GroupID = groupID
 
 	const pageSize = 500
 	page := 1
@@ -2887,12 +2915,7 @@ func (s *adminServiceImpl) resolveBulkUpdateTargetIDs(ctx context.Context, filte
 			ctx,
 			page,
 			pageSize,
-			filters.Platform,
-			filters.Type,
-			filters.Status,
-			filters.Search,
-			groupID,
-			filters.PrivacyMode,
+			accountFilters,
 			"",
 			"",
 		)
@@ -2909,11 +2932,73 @@ func (s *adminServiceImpl) resolveBulkUpdateTargetIDs(ctx context.Context, filte
 	}
 }
 
+func bulkUpdateFiltersToAccountListFilters(filters *BulkUpdateAccountFilters) (AccountListFilters, error) {
+	if filters == nil {
+		return AccountListFilters{}, nil
+	}
+	out := AccountListFilters{
+		Platform:          filters.Platform,
+		Type:              filters.Type,
+		Status:            filters.Status,
+		Search:            filters.Search,
+		PrivacyMode:       filters.PrivacyMode,
+		CleanupStatus:     filters.CleanupStatus,
+		IntegrationSource: filters.IntegrationSource,
+	}
+	switch strings.TrimSpace(filters.Group) {
+	case "":
+	case "ungrouped":
+		out.GroupID = AccountListGroupUngrouped
+	default:
+		groupID, err := strconv.ParseInt(strings.TrimSpace(filters.Group), 10, 64)
+		if err != nil {
+			return out, fmt.Errorf("invalid group filter: %w", err)
+		}
+		out.GroupID = groupID
+	}
+	return out, nil
+}
+
 func (s *adminServiceImpl) DeleteAccount(ctx context.Context, id int64) error {
 	if err := s.accountRepo.Delete(ctx, id); err != nil {
 		return err
 	}
 	return nil
+}
+
+func (s *adminServiceImpl) BulkDeleteAccounts(ctx context.Context, input *BulkDeleteAccountsInput) (*BulkDeleteAccountsResult, error) {
+	if input == nil {
+		input = &BulkDeleteAccountsInput{}
+	}
+	if len(input.AccountIDs) == 0 && input.Filters != nil {
+		accountIDs, err := s.resolveBulkUpdateTargetIDs(ctx, input.Filters)
+		if err != nil {
+			return nil, err
+		}
+		input.AccountIDs = accountIDs
+	}
+
+	result := &BulkDeleteAccountsResult{
+		SuccessIDs: make([]int64, 0, len(input.AccountIDs)),
+		FailedIDs:  make([]int64, 0, len(input.AccountIDs)),
+		Results:    make([]BulkDeleteAccountResult, 0, len(input.AccountIDs)),
+	}
+	for _, accountID := range input.AccountIDs {
+		entry := BulkDeleteAccountResult{AccountID: accountID}
+		if err := s.accountRepo.Delete(ctx, accountID); err != nil {
+			entry.Success = false
+			entry.Error = err.Error()
+			result.Failed++
+			result.FailedIDs = append(result.FailedIDs, accountID)
+			result.Results = append(result.Results, entry)
+			continue
+		}
+		entry.Success = true
+		result.Success++
+		result.SuccessIDs = append(result.SuccessIDs, accountID)
+		result.Results = append(result.Results, entry)
+	}
+	return result, nil
 }
 
 func (s *adminServiceImpl) RefreshAccountCredentials(ctx context.Context, id int64) (*Account, error) {

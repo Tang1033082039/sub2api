@@ -462,11 +462,19 @@ func (r *accountRepository) Delete(ctx context.Context, id int64) error {
 }
 
 func (r *accountRepository) List(ctx context.Context, params pagination.PaginationParams) ([]service.Account, *pagination.PaginationResult, error) {
-	return r.ListWithFilters(ctx, params, "", "", "", "", 0, "")
+	return r.ListWithFilters(ctx, params, service.AccountListFilters{})
 }
 
-func (r *accountRepository) ListWithFilters(ctx context.Context, params pagination.PaginationParams, platform, accountType, status, search string, groupID int64, privacyMode string) ([]service.Account, *pagination.PaginationResult, error) {
+func (r *accountRepository) ListWithFilters(ctx context.Context, params pagination.PaginationParams, filters service.AccountListFilters) ([]service.Account, *pagination.PaginationResult, error) {
 	q := r.client.Account.Query()
+
+	platform := strings.TrimSpace(filters.Platform)
+	accountType := strings.TrimSpace(filters.Type)
+	status := strings.TrimSpace(filters.Status)
+	search := strings.TrimSpace(filters.Search)
+	privacyMode := strings.TrimSpace(filters.PrivacyMode)
+	cleanupStatus := strings.TrimSpace(filters.CleanupStatus)
+	integrationSource := strings.TrimSpace(filters.IntegrationSource)
 
 	if platform != "" {
 		q = q.Where(dbaccount.PlatformEQ(platform))
@@ -538,10 +546,10 @@ func (r *accountRepository) ListWithFilters(ctx context.Context, params paginati
 	if search != "" {
 		q = q.Where(dbaccount.NameContainsFold(search))
 	}
-	if groupID == service.AccountListGroupUngrouped {
+	if filters.GroupID == service.AccountListGroupUngrouped {
 		q = q.Where(dbaccount.Not(dbaccount.HasAccountGroups()))
-	} else if groupID > 0 {
-		q = q.Where(dbaccount.HasAccountGroupsWith(dbaccountgroup.GroupIDEQ(groupID)))
+	} else if filters.GroupID > 0 {
+		q = q.Where(dbaccount.HasAccountGroupsWith(dbaccountgroup.GroupIDEQ(filters.GroupID)))
 	}
 	if privacyMode != "" {
 		q = q.Where(dbpredicate.Account(func(s *entsql.Selector) {
@@ -555,6 +563,16 @@ func (r *accountRepository) ListWithFilters(ctx context.Context, params paginati
 			default:
 				s.Where(sqljson.ValueEQ(dbaccount.FieldExtra, privacyMode, path))
 			}
+		}))
+	}
+	if cleanupStatus != "" {
+		q = q.Where(dbpredicate.Account(func(s *entsql.Selector) {
+			s.Where(sqljson.ValueEQ(dbaccount.FieldExtra, cleanupStatus, sqljson.Path("cleanup_status")))
+		}))
+	}
+	if integrationSource != "" {
+		q = q.Where(dbpredicate.Account(func(s *entsql.Selector) {
+			s.Where(sqljson.ValueEQ(dbaccount.FieldExtra, integrationSource, sqljson.Path("integration_source")))
 		}))
 	}
 
