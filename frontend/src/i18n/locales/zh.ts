@@ -3791,6 +3791,10 @@ export default {
           hint: '启用后将请求转发到自定义中继服务，代理地址将作为 URL 参数传递给中继服务',
           urlHint: '中继服务地址（如 https://relay.example.com）',
         },
+        upstreamSiteAffinity: {
+          label: '上游站点亲和',
+          hint: '启用后会优先复用同一 Base URL 的账号，减少站点间切换导致的缓存命中下降',
+        },
         clientAffinity: {
           label: '客户端亲和调度',
           hint: '启用后，新会话会优先调度到该客户端之前使用过的账号，避免频繁切换账号'

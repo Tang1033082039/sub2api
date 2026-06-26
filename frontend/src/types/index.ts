@@ -896,6 +896,9 @@ export interface Account {
   custom_base_url_enabled?: boolean | null
   custom_base_url?: string | null
 
+  // 上游站点亲和（用于站点内账号优先复用）
+  sticky_upstream_site_affinity?: boolean | null
+
   // API Key 账号配额限制
   quota_limit?: number | null
   quota_used?: number | null

@@ -49,6 +49,7 @@ type OpenAIAccountScheduleRequest struct {
 	RequiredImageCapability OpenAIImagesCapability
 	RequireCompact          bool
 	ExcludedIDs             map[int64]struct{}
+	PreferredSiteKey        string
 }
 
 type OpenAIAccountScheduleDecision struct {
@@ -378,6 +379,9 @@ func (s *defaultOpenAIAccountScheduler) selectBySessionHash(
 	account = s.service.recheckSelectedOpenAIAccountFromDB(ctx, account, req.RequestedModel, req.RequireCompact, req.RequiredCapability)
 	if account == nil || !openAIStickyAccountMatchesGroup(account, req.GroupID) || !s.isAccountTransportCompatible(account, req.RequiredTransport) {
 		_ = s.service.deleteStickySessionAccountID(ctx, req.GroupID, sessionHash)
+		return nil, false, nil
+	}
+	if preferred := strings.TrimSpace(req.PreferredSiteKey); preferred != "" && openAIAccountSiteKey(account) != preferred {
 		return nil, false, nil
 	}
 	escapeCfg := s.service.openAIStickyEscapeConfig()
@@ -995,6 +999,7 @@ func (s *defaultOpenAIAccountScheduler) selectByLoadBalance(
 	topK := plan.topK
 	loadSkew := plan.loadSkew
 	selectionOrder := plan.selectionOrder
+	preferredSite := strings.TrimSpace(req.PreferredSiteKey)
 	if req.RequireCompact && len(plan.candidates) == 0 && len(plan.staleSnapshotCompactRetry) == 0 {
 		return nil, 0, 0, 0, ErrNoAvailableCompactAccounts
 	}
@@ -1003,6 +1008,24 @@ func (s *defaultOpenAIAccountScheduler) selectByLoadBalance(
 	}
 	if len(selectionOrder) == 0 {
 		return nil, candidateCount, topK, loadSkew, noAvailableOpenAISelectionError(req.RequestedModel, req.RequireCompact && len(plan.allCandidates) > 0)
+	}
+
+	if preferredSite != "" {
+		var sameSite []openAIAccountCandidateScore
+		for _, candidate := range selectionOrder {
+			if openAIAccountSiteKey(candidate.account) == preferredSite {
+				sameSite = append(sameSite, candidate)
+			}
+		}
+		if len(sameSite) > 0 {
+			result, compactBlocked, acquireErr := s.tryAcquireOpenAISelectionOrder(ctx, req, sameSite)
+			if acquireErr != nil {
+				return nil, candidateCount, topK, loadSkew, acquireErr
+			}
+			if result != nil {
+				return result, candidateCount, topK, loadSkew, nil
+			}
+		}
 	}
 
 	result, compactBlocked, acquireErr := s.tryAcquireOpenAISelectionOrder(ctx, req, selectionOrder)
@@ -1347,7 +1370,19 @@ func (s *OpenAIGatewayService) selectAccountWithScheduler(
 		RequiredImageCapability: requiredImageCapability,
 		RequireCompact:          requireCompact,
 		ExcludedIDs:             excludedIDs,
+		PreferredSiteKey:        openAIAccountSiteKey(mustAccountByID(s.service, ctx, stickyAccountID)),
 	})
+}
+
+func mustAccountByID(svc *OpenAIGatewayService, ctx context.Context, accountID int64) *Account {
+	if svc == nil || svc.accountRepo == nil || accountID <= 0 {
+		return nil
+	}
+	account, err := svc.accountRepo.GetByID(ctx, accountID)
+	if err != nil {
+		return nil
+	}
+	return account
 }
 
 func accountSupportsOpenAICapabilities(account *Account, requiredCapability OpenAIEndpointCapability, requiredImageCapability OpenAIImagesCapability) bool {

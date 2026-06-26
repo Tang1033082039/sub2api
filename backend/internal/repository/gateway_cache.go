@@ -3,6 +3,7 @@ package repository
 import (
 	"context"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/Wei-Shaw/sub2api/internal/service"
@@ -10,6 +11,7 @@ import (
 )
 
 const stickySessionPrefix = "sticky_session:"
+const upstreamSiteCooldownPrefix = "upstream_site_cooldown:"
 
 type gatewayCache struct {
 	rdb *redis.Client
@@ -50,6 +52,28 @@ func (c *gatewayCache) RefreshSessionTTL(ctx context.Context, groupID int64, ses
 func (c *gatewayCache) DeleteSessionAccountID(ctx context.Context, groupID int64, sessionHash string) error {
 	key := buildSessionKey(groupID, sessionHash)
 	return c.rdb.Del(ctx, key).Err()
+}
+
+func buildUpstreamSiteCooldownKey(siteKey string) string {
+	return upstreamSiteCooldownPrefix + strings.TrimSpace(siteKey)
+}
+
+func (c *gatewayCache) SetUpstreamSiteCooldown(ctx context.Context, siteKey string, ttl time.Duration) error {
+	if strings.TrimSpace(siteKey) == "" {
+		return nil
+	}
+	return c.rdb.Set(ctx, buildUpstreamSiteCooldownKey(siteKey), "1", ttl).Err()
+}
+
+func (c *gatewayCache) IsUpstreamSiteCooling(ctx context.Context, siteKey string) (bool, error) {
+	if strings.TrimSpace(siteKey) == "" {
+		return false, nil
+	}
+	n, err := c.rdb.Exists(ctx, buildUpstreamSiteCooldownKey(siteKey)).Result()
+	if err != nil {
+		return false, err
+	}
+	return n > 0, nil
 }
 
 // Compile-time assertion: gatewayCache must implement CyberSessionBlockStore.

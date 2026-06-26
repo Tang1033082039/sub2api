@@ -227,6 +227,9 @@ type Account struct {
 	CustomBaseURLEnabled *bool   `json:"custom_base_url_enabled,omitempty"`
 	CustomBaseURL        *string `json:"custom_base_url,omitempty"`
 
+	// 上游站点亲和（仅 API Key / upstream 类型账号有效）
+	StickyUpstreamSiteAffinity *bool `json:"sticky_upstream_site_affinity,omitempty"`
+
 	// API Key 账号配额限制
 	QuotaLimit       *float64 `json:"quota_limit,omitempty"`
 	QuotaUsed        *float64 `json:"quota_used,omitempty"`

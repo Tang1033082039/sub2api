@@ -3640,6 +3640,10 @@ export default {
           hint: 'Forward requests to a custom relay service. Proxy URL will be passed as a query parameter.',
           urlHint: 'Relay service URL (e.g., https://relay.example.com)',
         },
+        upstreamSiteAffinity: {
+          label: 'Upstream site affinity',
+          hint: 'Prefer accounts sharing the same Base URL to reduce cache misses from site switching',
+        },
         clientAffinity: {
           label: 'Client Affinity Scheduling',
           hint: 'When enabled, new sessions prefer accounts previously used by this client to reduce account switching'

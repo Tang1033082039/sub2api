@@ -1728,6 +1728,20 @@ func (a *Account) IsCustomBaseURLEnabled() bool {
 	return false
 }
 
+// IsStickyUpstreamSiteAffinityEnabled 检查是否启用上游站点亲和
+// 仅适用于 API Key / upstream 类型账号
+func (a *Account) IsStickyUpstreamSiteAffinityEnabled() bool {
+	if a == nil || a.Extra == nil {
+		return false
+	}
+	if v, ok := a.Extra["sticky_upstream_site_affinity"]; ok {
+		if enabled, ok := v.(bool); ok {
+			return enabled
+		}
+	}
+	return false
+}
+
 // GetCustomBaseURL 返回自定义中继服务的 base URL
 func (a *Account) GetCustomBaseURL() string {
 	return a.GetExtraString("custom_base_url")

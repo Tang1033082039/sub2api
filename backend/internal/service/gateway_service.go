@@ -461,6 +461,10 @@ type GatewayCache interface {
 	// DeleteSessionAccountID 删除粘性会话绑定，用于账号不可用时主动清理
 	// Delete sticky session binding, used to proactively clean up when account becomes unavailable
 	DeleteSessionAccountID(ctx context.Context, groupID int64, sessionHash string) error
+	// SetUpstreamSiteCooldown marks a site temporarily unhealthy.
+	SetUpstreamSiteCooldown(ctx context.Context, siteKey string, ttl time.Duration) error
+	// IsUpstreamSiteCooling reports whether a site is still in cooldown.
+	IsUpstreamSiteCooling(ctx context.Context, siteKey string) (bool, error)
 }
 
 // derefGroupID safely dereferences *int64 to int64, returning 0 if nil
@@ -483,6 +487,50 @@ func resolveModelsListCacheTTL(cfg *config.Config) time.Duration {
 		return defaultModelsListCacheTTL
 	}
 	return time.Duration(cfg.Gateway.ModelsListCacheTTLSeconds) * time.Second
+}
+
+func normalizeGatewayBaseURL(raw string) string {
+	baseURL := strings.TrimSpace(raw)
+	if baseURL == "" {
+		return ""
+	}
+	return strings.TrimRight(baseURL, "/")
+}
+
+func accountUpstreamSiteKey(account *Account) string {
+	if account == nil {
+		return ""
+	}
+	var baseURL string
+	if account.IsOpenAI() {
+		baseURL = account.GetOpenAIBaseURL()
+	} else {
+		baseURL = account.GetBaseURL()
+	}
+	baseURL = normalizeGatewayBaseURL(baseURL)
+	if baseURL == "" {
+		return ""
+	}
+	return account.Platform + "|" + baseURL
+}
+
+func isGatewaySiteTransientFailure(statusCode int, err error) bool {
+	if err != nil {
+		msg := strings.ToLower(err.Error())
+		if strings.Contains(msg, "timeout") ||
+			strings.Contains(msg, "deadline") ||
+			strings.Contains(msg, "connection reset") ||
+			strings.Contains(msg, "bad gateway") ||
+			strings.Contains(msg, "gateway timeout") {
+			return true
+		}
+	}
+	switch statusCode {
+	case http.StatusBadGateway, http.StatusGatewayTimeout:
+		return true
+	default:
+		return statusCode >= 500
+	}
 }
 
 func modelsListCacheKey(groupID *int64, platform string) string {
@@ -1596,10 +1644,19 @@ func (s *GatewayService) SelectAccountForModelWithExclusions(ctx context.Context
 		return nil, fmt.Errorf("%w supporting model: %s (channel pricing restriction)", ErrNoAvailableAccounts, requestedModel)
 	}
 
+	var preferredSiteKey string
+	if sessionHash != "" && s.cache != nil {
+		if accountID, err := s.cache.GetSessionAccountID(ctx, derefGroupID(groupID), sessionHash); err == nil && accountID > 0 {
+			if account, err := s.accountRepo.GetByID(ctx, accountID); err == nil && account != nil {
+				preferredSiteKey = accountUpstreamSiteKey(account)
+			}
+		}
+	}
+
 	// anthropic/gemini 分组支持混合调度（包含启用了 mixed_scheduling 的 antigravity 账户）
 	// 注意：强制平台模式不走混合调度
 	if (platform == PlatformAnthropic || platform == PlatformGemini) && !hasForcePlatform {
-		account, err := s.selectAccountWithMixedScheduling(ctx, groupID, sessionHash, requestedModel, excludedIDs, platform)
+		account, err := s.selectAccountWithMixedScheduling(ctx, groupID, sessionHash, requestedModel, excludedIDs, platform, preferredSiteKey)
 		if err != nil {
 			return nil, err
 		}
@@ -1608,7 +1665,7 @@ func (s *GatewayService) SelectAccountForModelWithExclusions(ctx context.Context
 
 	// antigravity 分组、强制平台模式或无分组使用单平台选择
 	// 注意：强制平台模式也必须遵守分组限制，不再回退到全平台查询
-	account, err := s.selectAccountForModelWithPlatform(ctx, groupID, sessionHash, requestedModel, excludedIDs, platform)
+	account, err := s.selectAccountForModelWithPlatform(ctx, groupID, sessionHash, requestedModel, excludedIDs, platform, preferredSiteKey)
 	if err != nil {
 		return nil, err
 	}
@@ -3251,7 +3308,7 @@ func shuffleWithinPriority(accounts []*Account) {
 }
 
 // selectAccountForModelWithPlatform 选择单平台账户（完全隔离）
-func (s *GatewayService) selectAccountForModelWithPlatform(ctx context.Context, groupID *int64, sessionHash string, requestedModel string, excludedIDs map[int64]struct{}, platform string) (*Account, error) {
+func (s *GatewayService) selectAccountForModelWithPlatform(ctx context.Context, groupID *int64, sessionHash string, requestedModel string, excludedIDs map[int64]struct{}, platform string, preferredSiteKey string) (*Account, error) {
 	preferOAuth := platform == PlatformGemini
 	routingAccountIDs := s.routingAccountIDsForRequest(ctx, groupID, requestedModel, platform)
 
@@ -3404,7 +3461,9 @@ func (s *GatewayService) selectAccountForModelWithPlatform(ctx context.Context, 
 						_ = s.cache.DeleteSessionAccountID(ctx, derefGroupID(groupID), sessionHash)
 					}
 					if !clearSticky && s.isAccountInGroup(account, groupID) && account.Platform == platform && (requestedModel == "" || s.isModelSupportedByAccountWithContext(ctx, account, requestedModel)) && s.isAccountSchedulableForModelSelection(ctx, account, requestedModel) && s.isAccountSchedulableForQuota(account) && s.isAccountSchedulableForWindowCost(ctx, account, true) && s.isAccountSchedulableForRPM(ctx, account, true) {
-						return account, nil
+						if preferredSiteKey == "" || accountUpstreamSiteKey(account) == preferredSiteKey {
+							return account, nil
+						}
 					}
 				}
 			}
@@ -3427,6 +3486,50 @@ func (s *GatewayService) selectAccountForModelWithPlatform(ctx context.Context, 
 	// 批量预取窗口费用+RPM 计数，避免逐个账号查询（N+1）
 	ctx = s.withWindowCostPrefetch(ctx, accounts)
 	ctx = s.withRPMPrefetch(ctx, accounts)
+
+	if preferredSiteKey != "" {
+		var sameSiteSelected *Account
+		for i := range accounts {
+			acc := &accounts[i]
+			if accountUpstreamSiteKey(acc) != preferredSiteKey {
+				continue
+			}
+			if _, excluded := excludedIDs[acc.ID]; excluded {
+				continue
+			}
+			if !s.isAccountSchedulableForSelection(acc) {
+				continue
+			}
+			if schedGroup != nil && schedGroup.RequirePrivacySet && !acc.IsPrivacySet() {
+				continue
+			}
+			if requestedModel != "" && !s.isModelSupportedByAccountWithContext(ctx, acc, requestedModel) {
+				continue
+			}
+			if needsUpstreamCheck && s.isUpstreamModelRestrictedByChannel(ctx, *groupID, acc, requestedModel) {
+				continue
+			}
+			if !s.isAccountSchedulableForModelSelection(ctx, acc, requestedModel) ||
+				!s.isAccountSchedulableForQuota(acc) ||
+				!s.isAccountSchedulableForWindowCost(ctx, acc, false) ||
+				!s.isAccountSchedulableForRPM(ctx, acc, false) {
+				continue
+			}
+			if sameSiteSelected == nil ||
+				acc.Priority < sameSiteSelected.Priority ||
+				(acc.Priority == sameSiteSelected.Priority && acc.LastUsedAt != nil && (sameSiteSelected.LastUsedAt == nil || acc.LastUsedAt.Before(*sameSiteSelected.LastUsedAt))) {
+				sameSiteSelected = acc
+			}
+		}
+		if sameSiteSelected != nil {
+			if sessionHash != "" && s.cache != nil {
+				if err := s.cache.SetSessionAccountID(ctx, derefGroupID(groupID), sessionHash, sameSiteSelected.ID, stickySessionTTL); err != nil {
+					logger.LegacyPrintf("service.gateway", "set session account failed: session=%s account_id=%d err=%v", sessionHash, sameSiteSelected.ID, err)
+				}
+			}
+			return sameSiteSelected, nil
+		}
+	}
 
 	// 3. 按优先级+最久未用选择（考虑模型支持）
 	// needsUpstreamCheck 仅在主选择循环中使用；粘性会话命中时跳过此检查，
@@ -3511,7 +3614,7 @@ func (s *GatewayService) selectAccountForModelWithPlatform(ctx context.Context, 
 
 // selectAccountWithMixedScheduling 选择账户（支持混合调度）
 // 查询原生平台账户 + 启用 mixed_scheduling 的 antigravity 账户
-func (s *GatewayService) selectAccountWithMixedScheduling(ctx context.Context, groupID *int64, sessionHash string, requestedModel string, excludedIDs map[int64]struct{}, nativePlatform string) (*Account, error) {
+func (s *GatewayService) selectAccountWithMixedScheduling(ctx context.Context, groupID *int64, sessionHash string, requestedModel string, excludedIDs map[int64]struct{}, nativePlatform string, preferredSiteKey string) (*Account, error) {
 	preferOAuth := nativePlatform == PlatformGemini
 	routingAccountIDs := s.routingAccountIDsForRequest(ctx, groupID, requestedModel, nativePlatform)
 
@@ -3543,11 +3646,13 @@ func (s *GatewayService) selectAccountWithMixedScheduling(ctx context.Context, g
 							_ = s.cache.DeleteSessionAccountID(ctx, derefGroupID(groupID), sessionHash)
 						}
 						if !clearSticky && s.isAccountInGroup(account, groupID) && (requestedModel == "" || s.isModelSupportedByAccountWithContext(ctx, account, requestedModel)) && s.isAccountSchedulableForModelSelection(ctx, account, requestedModel) && s.isAccountSchedulableForQuota(account) && s.isAccountSchedulableForWindowCost(ctx, account, true) && s.isAccountSchedulableForRPM(ctx, account, true) {
-							if account.Platform == nativePlatform || (account.Platform == PlatformAntigravity && account.IsMixedSchedulingEnabled()) {
-								if s.debugModelRoutingEnabled() {
-									logger.LegacyPrintf("service.gateway", "[ModelRoutingDebug] legacy mixed routed sticky hit: group_id=%v model=%s session=%s account=%d", derefGroupID(groupID), requestedModel, shortSessionHash(sessionHash), accountID)
+							if preferredSiteKey == "" || accountUpstreamSiteKey(account) == preferredSiteKey {
+								if account.Platform == nativePlatform || (account.Platform == PlatformAntigravity && account.IsMixedSchedulingEnabled()) {
+									if s.debugModelRoutingEnabled() {
+										logger.LegacyPrintf("service.gateway", "[ModelRoutingDebug] legacy mixed routed sticky hit: group_id=%v model=%s session=%s account=%d", derefGroupID(groupID), requestedModel, shortSessionHash(sessionHash), accountID)
+									}
+									return account, nil
 								}
-								return account, nil
 							}
 						}
 					}

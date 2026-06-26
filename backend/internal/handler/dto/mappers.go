@@ -290,6 +290,10 @@ func AccountFromServiceShallow(a *service.Account) *Account {
 				out.CustomBaseURL = &customURL
 			}
 		}
+		if a.IsStickyUpstreamSiteAffinityEnabled() {
+			enabled := true
+			out.StickyUpstreamSiteAffinity = &enabled
+		}
 	}
 
 	// 提取账号配额限制（apikey / bedrock 类型有效）

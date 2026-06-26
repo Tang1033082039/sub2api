@@ -124,8 +124,13 @@ func (s *OpenAIGatewayService) handleOpenAIUpstreamTransportError(ctx context.Co
 		return err
 	}
 
-	if classifyOpenAITransportError(err).Persistent {
+	classification := classifyOpenAITransportError(err)
+	if classification.Persistent {
 		s.tempUnscheduleOpenAITransportError(ctx, account, safeErr)
+	} else if s != nil && s.cache != nil && account != nil {
+		if siteKey := accountUpstreamSiteKey(account); siteKey != "" {
+			_ = s.cache.SetUpstreamSiteCooldown(ctx, siteKey, 60*time.Second)
+		}
 	}
 
 	return &UpstreamFailoverError{

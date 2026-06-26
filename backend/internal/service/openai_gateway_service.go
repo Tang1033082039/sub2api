@@ -1648,9 +1648,16 @@ func (s *OpenAIGatewayService) selectAccountForModelWithExclusions(ctx context.C
 		return nil, fmt.Errorf("%w supporting model: %s (channel pricing restriction)", ErrNoAvailableAccounts, requestedModel)
 	}
 
+	preferredSiteKey := ""
+	if stickyAccountID > 0 && s.accountRepo != nil {
+		if stickyAccount, err := s.accountRepo.GetByID(ctx, stickyAccountID); err == nil && stickyAccount != nil {
+			preferredSiteKey = accountUpstreamSiteKey(stickyAccount)
+		}
+	}
+
 	// 1. 尝试粘性会话命中
 	// Try sticky session hit
-	if account := s.tryStickySessionHit(ctx, groupID, sessionHash, requestedModel, excludedIDs, requireCompact, stickyAccountID, requiredCapability); account != nil {
+	if account := s.tryStickySessionHit(ctx, groupID, sessionHash, requestedModel, excludedIDs, requireCompact, stickyAccountID, preferredSiteKey, requiredCapability); account != nil {
 		return account, nil
 	}
 
@@ -1663,7 +1670,7 @@ func (s *OpenAIGatewayService) selectAccountForModelWithExclusions(ctx context.C
 
 	// 3. 按优先级 + LRU 选择最佳账号
 	// Select by priority + LRU
-	selected, compactBlocked := s.selectBestAccount(ctx, groupID, accounts, requestedModel, excludedIDs, requireCompact, requiredCapability)
+	selected, compactBlocked := s.selectBestAccount(ctx, groupID, accounts, requestedModel, excludedIDs, requireCompact, preferredSiteKey, requiredCapability)
 
 	if selected == nil {
 		return nil, noAvailableOpenAISelectionError(requestedModel, compactBlocked)
@@ -1688,7 +1695,7 @@ func (s *OpenAIGatewayService) selectAccountForModelWithExclusions(ctx context.C
 //
 // tryStickySessionHit attempts to get account from sticky session.
 // Returns account if hit and usable; clears session and returns nil if account is unavailable.
-func (s *OpenAIGatewayService) tryStickySessionHit(ctx context.Context, groupID *int64, sessionHash, requestedModel string, excludedIDs map[int64]struct{}, requireCompact bool, stickyAccountID int64, requiredCapability OpenAIEndpointCapability) *Account {
+func (s *OpenAIGatewayService) tryStickySessionHit(ctx context.Context, groupID *int64, sessionHash, requestedModel string, excludedIDs map[int64]struct{}, requireCompact bool, stickyAccountID int64, preferredSiteKey string, requiredCapability OpenAIEndpointCapability) *Account {
 	if sessionHash == "" {
 		return nil
 	}
@@ -1732,6 +1739,14 @@ func (s *OpenAIGatewayService) tryStickySessionHit(ctx context.Context, groupID 
 		_ = s.deleteStickySessionAccountID(ctx, groupID, sessionHash)
 		return nil
 	}
+	if preferredSiteKey != "" && accountUpstreamSiteKey(account) != preferredSiteKey {
+		return nil
+	}
+	if s.cache != nil && preferredSiteKey != "" {
+		if cooling, err := s.cache.IsUpstreamSiteCooling(ctx, preferredSiteKey); err == nil && cooling {
+			return nil
+		}
+	}
 	if groupID != nil && s.needsUpstreamChannelRestrictionCheck(ctx, groupID) &&
 		s.isUpstreamModelRestrictedByChannel(ctx, *groupID, account, requestedModel, requireCompact) {
 		_ = s.deleteStickySessionAccountID(ctx, groupID, sessionHash)
@@ -1751,11 +1766,17 @@ func (s *OpenAIGatewayService) tryStickySessionHit(ctx context.Context, groupID 
 // Returns nil if no available account. The second return reports whether at
 // least one candidate was filtered out solely because it lacks compact support
 // (only meaningful when requireCompact=true).
-func (s *OpenAIGatewayService) selectBestAccount(ctx context.Context, groupID *int64, accounts []Account, requestedModel string, excludedIDs map[int64]struct{}, requireCompact bool, requiredCapability OpenAIEndpointCapability) (*Account, bool) {
+func (s *OpenAIGatewayService) selectBestAccount(ctx context.Context, groupID *int64, accounts []Account, requestedModel string, excludedIDs map[int64]struct{}, requireCompact bool, preferredSiteKey string, requiredCapability OpenAIEndpointCapability) (*Account, bool) {
 	var selected *Account
 	selectedCompactTier := -1
 	compactBlocked := false
 	needsUpstreamCheck := s.needsUpstreamChannelRestrictionCheck(ctx, groupID)
+	siteKey := strings.TrimSpace(preferredSiteKey)
+	if siteKey != "" && s.cache != nil {
+		if cooling, err := s.cache.IsUpstreamSiteCooling(ctx, siteKey); err == nil && cooling {
+			siteKey = ""
+		}
+	}
 
 	for i := range accounts {
 		acc := &accounts[i]
@@ -1772,6 +1793,9 @@ func (s *OpenAIGatewayService) selectBestAccount(ctx context.Context, groupID *i
 		}
 		fresh = s.recheckSelectedOpenAIAccountFromDB(ctx, fresh, requestedModel, false, requiredCapability)
 		if fresh == nil {
+			continue
+		}
+		if siteKey != "" && accountUpstreamSiteKey(fresh) != siteKey {
 			continue
 		}
 		if needsUpstreamCheck && s.isUpstreamModelRestrictedByChannel(ctx, *groupID, fresh, requestedModel, requireCompact) {
@@ -2375,6 +2399,11 @@ func (s *OpenAIGatewayService) readUpstreamErrorBody(resp *http.Response) []byte
 }
 
 func (s *OpenAIGatewayService) handleFailoverSideEffects(ctx context.Context, resp *http.Response, account *Account, responseBody []byte, requestedModel ...string) {
+	if s != nil && s.cache != nil && account != nil && isGatewaySiteTransientFailure(resp.StatusCode, nil) {
+		if siteKey := accountUpstreamSiteKey(account); siteKey != "" {
+			_ = s.cache.SetUpstreamSiteCooldown(ctx, siteKey, 60*time.Second)
+		}
+	}
 	if len(requestedModel) > 0 {
 		s.handleOpenAIAccountUpstreamError(ctx, account, resp.StatusCode, resp.Header, responseBody, requestedModel[0])
 		return
