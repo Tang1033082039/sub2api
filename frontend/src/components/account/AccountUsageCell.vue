@@ -536,6 +536,7 @@ const props = withDefaults(
 
 const { t } = useI18n()
 const desktopViewportQuery = '(min-width: 768px)'
+const isOpenAI = computed(() => props.account.platform === 'openai')
 
 const unmounted = ref(false)
 onBeforeUnmount(() => { unmounted.value = true })
@@ -579,7 +580,7 @@ const shouldFetchUsage = computed(() => {
   return false
 })
 
-const isOpenAIOAuthAccount = computed(() => props.account.platform === 'openai' && props.account.type === 'oauth')
+const isOpenAIOAuthAccount = computed(() => isOpenAI.value && props.account.type === 'oauth')
 
 const showGeminiTodayStats = computed(() => {
   return props.account.platform === 'gemini' && props.account.type === 'service_account'

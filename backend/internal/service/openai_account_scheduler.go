@@ -1373,7 +1373,7 @@ func (s *OpenAIGatewayService) selectAccountWithScheduler(
 		RequiredImageCapability: requiredImageCapability,
 		RequireCompact:          requireCompact,
 		ExcludedIDs:             excludedIDs,
-		PreferredSiteKey:        openAIAccountSiteKey(mustAccountByID(s.service, ctx, stickyAccountID)),
+		PreferredSiteKey:        openAIAccountSiteKey(mustAccountByID(s, ctx, stickyAccountID)),
 	})
 }
 
