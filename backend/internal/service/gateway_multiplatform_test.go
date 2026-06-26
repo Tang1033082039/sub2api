@@ -242,6 +242,10 @@ func (m *mockGatewayCacheForPlatform) DeleteSessionAccountID(ctx context.Context
 	return nil
 }
 
+func (m *mockGatewayCacheForPlatform) IsUpstreamSiteCooling(ctx context.Context, siteKey string) (bool, error) {
+	return false, nil
+}
+
 type mockGroupRepoForGateway struct {
 	groups           map[int64]*Group
 	getByIDCalls     int
