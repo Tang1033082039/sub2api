@@ -2260,7 +2260,7 @@
         </div>
 
         <div
-          v-if="account?.platform === 'openai' || account?.platform === 'anthropic'"
+          v-if="showUpstreamSiteAffinity"
           class="rounded-lg border border-gray-200 p-4 dark:border-dark-600"
         >
           <div class="flex items-center justify-between">
@@ -2825,6 +2825,9 @@ const normalizeOpenAIResponsesMode = (mode: unknown): OpenAIResponsesMode => {
 }
 const isOpenAIModelRestrictionDisabled = computed(() =>
   props.account?.platform === 'openai' && openaiPassthroughEnabled.value
+)
+const showUpstreamSiteAffinity = computed(() =>
+  props.account?.platform === 'openai' || props.account?.platform === 'anthropic'
 )
 const openAIResponsesStatusKey = computed(() => {
   if (openAIResponsesMode.value === 'force_responses') {

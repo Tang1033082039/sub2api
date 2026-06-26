@@ -2474,7 +2474,7 @@
         </div>
 
         <div
-          v-if="form.platform === 'openai' || form.platform === 'anthropic'"
+          v-if="showUpstreamSiteAffinity"
           class="rounded-lg border border-gray-200 p-4 dark:border-dark-600"
         >
           <div class="flex items-center justify-between">
@@ -3675,6 +3675,7 @@ const openAIWSModeConcurrencyHintKey = computed(() =>
 const isOpenAIModelRestrictionDisabled = computed(() =>
   form.platform === 'openai' && openaiPassthroughEnabled.value
 )
+const showUpstreamSiteAffinity = computed(() => form.platform === 'openai' || form.platform === 'anthropic')
 
 const mixedChannelWarningMessageText = computed(() => {
   if (mixedChannelWarningDetails.value) {
