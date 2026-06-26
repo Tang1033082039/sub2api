@@ -1507,6 +1507,8 @@ export interface UserBreakdownItem {
   email: string
   requests: number
   total_tokens: number
+  cache_creation_tokens: number
+  cache_read_tokens: number
   cost: number
   actual_cost: number
   account_cost: number

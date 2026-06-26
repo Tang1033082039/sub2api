@@ -1010,6 +1010,7 @@ func (s *defaultOpenAIAccountScheduler) selectByLoadBalance(
 		return nil, candidateCount, topK, loadSkew, noAvailableOpenAISelectionError(req.RequestedModel, req.RequireCompact && len(plan.allCandidates) > 0)
 	}
 
+	compactBlocked := false
 	if preferredSite != "" {
 		var sameSite []openAIAccountCandidateScore
 		for _, candidate := range selectionOrder {
@@ -1018,20 +1019,22 @@ func (s *defaultOpenAIAccountScheduler) selectByLoadBalance(
 			}
 		}
 		if len(sameSite) > 0 {
-			result, compactBlocked, acquireErr := s.tryAcquireOpenAISelectionOrder(ctx, req, sameSite)
+			result, sameSiteCompactBlocked, acquireErr := s.tryAcquireOpenAISelectionOrder(ctx, req, sameSite)
 			if acquireErr != nil {
 				return nil, candidateCount, topK, loadSkew, acquireErr
 			}
+			compactBlocked = compactBlocked || sameSiteCompactBlocked
 			if result != nil {
 				return result, candidateCount, topK, loadSkew, nil
 			}
 		}
 	}
 
-	result, compactBlocked, acquireErr := s.tryAcquireOpenAISelectionOrder(ctx, req, selectionOrder)
+	result, selectionCompactBlocked, acquireErr := s.tryAcquireOpenAISelectionOrder(ctx, req, selectionOrder)
 	if acquireErr != nil {
 		return nil, candidateCount, topK, loadSkew, acquireErr
 	}
+	compactBlocked = compactBlocked || selectionCompactBlocked
 	if result != nil {
 		return result, candidateCount, topK, loadSkew, nil
 	}

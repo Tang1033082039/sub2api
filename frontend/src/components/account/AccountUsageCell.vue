@@ -579,6 +579,8 @@ const shouldFetchUsage = computed(() => {
   return false
 })
 
+const isOpenAIOAuthAccount = computed(() => props.account.platform === 'openai' && props.account.type === 'oauth')
+
 const showGeminiTodayStats = computed(() => {
   return props.account.platform === 'gemini' && props.account.type === 'service_account'
 })
@@ -595,7 +597,7 @@ const geminiUsageAvailable = computed(() => {
 })
 
 const hasOpenAIUsageFallback = computed(() => {
-  if (props.account.platform !== 'openai' || props.account.type !== 'oauth') return false
+  if (!isOpenAIOAuthAccount.value) return false
   return !!usageInfo.value?.five_hour || !!usageInfo.value?.seven_day
 })
 
@@ -1224,7 +1226,7 @@ onMounted(() => {
 
 watch(openAIUsageRefreshKey, (nextKey, prevKey) => {
   if (!prevKey || nextKey === prevKey) return
-  if (props.account.platform !== 'openai' || props.account.type !== 'oauth') return
+  if (!isOpenAIOAuthAccount.value) return
 
   requestAutoLoad()
 })

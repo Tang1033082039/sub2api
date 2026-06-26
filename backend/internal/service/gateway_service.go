@@ -514,6 +514,10 @@ func accountUpstreamSiteKey(account *Account) string {
 	return account.Platform + "|" + baseURL
 }
 
+func openAIAccountSiteKey(account *Account) string {
+	return accountUpstreamSiteKey(account)
+}
+
 func isGatewaySiteTransientFailure(statusCode int, err error) bool {
 	if err != nil {
 		msg := strings.ToLower(err.Error())

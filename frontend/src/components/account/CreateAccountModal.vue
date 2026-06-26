@@ -3914,7 +3914,7 @@ watch(
 watch(
   [accountCategory, () => form.platform],
   ([category, platform]) => {
-    if (platform === 'openai' && category !== 'oauth-based') {
+    if (platform === 'openai' && category === 'apikey') {
       codexCLIOnlyEnabled.value = false
       codexCLIOnlyAllowClaudeCodeEnabled.value = false
     }
