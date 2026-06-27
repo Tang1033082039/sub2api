@@ -3766,6 +3766,20 @@
                 </div>
                 <Toggle v-model="form.openai_advanced_scheduler_enabled" />
               </div>
+
+              <div class="flex items-center justify-between">
+                <div>
+                  <label
+                    class="text-sm font-medium text-gray-700 dark:text-gray-300"
+                  >
+                    {{ t("admin.settings.scheduling.upstreamSiteAffinity") }}
+                  </label>
+                  <p class="mt-0.5 text-xs text-gray-500 dark:text-gray-400">
+                    {{ t("admin.settings.scheduling.upstreamSiteAffinityHint") }}
+                  </p>
+                </div>
+                <Toggle v-model="form.upstream_site_affinity_enabled" />
+              </div>
             </div>
           </div>
 
@@ -4193,17 +4207,6 @@
                 <Toggle v-model="form.openai_allow_claude_code_codex_plugin" />
               </div>
 
-              <div class="flex items-center justify-between">
-                <div class="pr-4">
-                  <label class="block text-sm font-medium text-gray-700 dark:text-gray-300">
-                    {{ t("admin.settings.gatewayForwarding.upstreamSiteAffinity") }}
-                  </label>
-                  <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
-                    {{ t("admin.settings.gatewayForwarding.upstreamSiteAffinityDesc") }}
-                  </p>
-                </div>
-                <Toggle v-model="form.upstream_site_affinity_enabled" />
-              </div>
             </div>
           </div>
           <!-- Web Search Emulation -->

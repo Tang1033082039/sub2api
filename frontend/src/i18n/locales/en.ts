@@ -5752,7 +5752,9 @@ export default {
         title: 'Gateway Scheduling Settings',
         description: 'Control API Key scheduling behavior',
         allowUngroupedKey: 'Allow Ungrouped Key Scheduling',
-        allowUngroupedKeyHint: 'When disabled, API Keys not assigned to any group cannot make requests (403 Forbidden). Keep disabled to ensure all Keys belong to a specific group.'
+        allowUngroupedKeyHint: 'When disabled, API Keys not assigned to any group cannot make requests (403 Forbidden). Keep disabled to ensure all Keys belong to a specific group.',
+        upstreamSiteAffinity: 'Upstream Site Affinity',
+        upstreamSiteAffinityHint: 'Global switch, disabled by default. When enabled, OpenAI and Anthropic scheduling prefer upstream accounts with the same Base URL.'
       },
       gatewayForwarding: {
         title: 'Request Forwarding',
@@ -5800,8 +5802,6 @@ export default {
         openaiAllowClaudeCodeCodexPlugin: "Allow using the Codex plugin in Claude Code",
         openaiAllowClaudeCodeCodexPluginDesc:
           "Global switch; only affects OpenAI OAuth accounts that have 'Codex official clients only' enabled. When on, all such accounts additionally allow requests from the Claude Code Codex plugin (exact match on originator=Claude Code) without per-account config; upstream requests remain pass-through.",
-        upstreamSiteAffinity: 'Upstream Site Affinity',
-        upstreamSiteAffinityDesc: 'Global switch. When enabled, OpenAI and Anthropic accounts prefer reusing upstream accounts with the same Base URL.',
       },
       webSearchEmulation: {
         title: 'Web Search Emulation',

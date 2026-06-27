@@ -5906,7 +5906,9 @@ export default {
         title: '网关调度设置',
         description: '控制 API Key 的调度行为',
         allowUngroupedKey: '允许未分组 Key 调度',
-        allowUngroupedKeyHint: '关闭后，未分配到任何分组的 API Key 将无法发起请求（返回 403）。建议保持关闭以确保所有 Key 都归属明确的分组。'
+        allowUngroupedKeyHint: '关闭后，未分配到任何分组的 API Key 将无法发起请求（返回 403）。建议保持关闭以确保所有 Key 都归属明确的分组。',
+        upstreamSiteAffinity: '上游站点亲和',
+        upstreamSiteAffinityHint: '全局开关，默认关闭。开启后，OpenAI 和 Anthropic 调度会优先复用同一 Base URL 的上游账号。'
       },
       gatewayForwarding: {
         title: '请求转发行为',
@@ -5954,8 +5956,6 @@ export default {
         openaiAllowClaudeCodeCodexPlugin: '允许在 Claude Code 中使用 Codex 插件',
         openaiAllowClaudeCodeCodexPluginDesc:
           '全局开关，仅对已开启「仅允许 Codex 官方客户端」的 OpenAI OAuth 账号生效。开启后，所有此类账号都额外放行通过 Claude Code 的 Codex 插件发起的请求（精确匹配 originator=Claude Code），无需逐账号配置；上游请求仍保持透传。',
-        upstreamSiteAffinity: '上游站点亲和',
-        upstreamSiteAffinityDesc: '全局开关。开启后，OpenAI 和 Anthropic 账号会优先复用同一 Base URL 的上游账号。',
       },
       webSearchEmulation: {
         title: 'Web Search 模拟',
