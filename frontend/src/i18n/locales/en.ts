@@ -1463,6 +1463,7 @@ export default {
       noGroup: 'No Group',
       requests: 'Requests',
       tokens: 'Tokens',
+      cacheRate: 'Cache Rate',
       actual: 'Actual',
       standard: 'Standard',
       accountCost: 'Cost',
@@ -5799,6 +5800,8 @@ export default {
         openaiAllowClaudeCodeCodexPlugin: "Allow using the Codex plugin in Claude Code",
         openaiAllowClaudeCodeCodexPluginDesc:
           "Global switch; only affects OpenAI OAuth accounts that have 'Codex official clients only' enabled. When on, all such accounts additionally allow requests from the Claude Code Codex plugin (exact match on originator=Claude Code) without per-account config; upstream requests remain pass-through.",
+        upstreamSiteAffinity: 'Upstream Site Affinity',
+        upstreamSiteAffinityDesc: 'Global switch. When enabled, OpenAI and Anthropic accounts prefer reusing upstream accounts with the same Base URL.',
       },
       webSearchEmulation: {
         title: 'Web Search Emulation',

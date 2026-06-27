@@ -2259,34 +2259,6 @@
           </div>
         </div>
 
-        <div
-          v-if="showUpstreamSiteAffinity"
-          class="rounded-lg border border-gray-200 p-4 dark:border-dark-600"
-        >
-          <div class="flex items-center justify-between">
-            <div>
-              <label class="input-label mb-0">{{ t('admin.accounts.quotaControl.upstreamSiteAffinity.label') }}</label>
-              <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
-                {{ t('admin.accounts.quotaControl.upstreamSiteAffinity.hint') }}
-              </p>
-            </div>
-            <button
-              type="button"
-              @click="stickyUpstreamSiteAffinityEnabled = !stickyUpstreamSiteAffinityEnabled"
-              :class="[
-                'relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2',
-                stickyUpstreamSiteAffinityEnabled ? 'bg-primary-600' : 'bg-gray-200 dark:bg-dark-600'
-              ]"
-            >
-              <span
-                :class="[
-                  'pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out',
-                  stickyUpstreamSiteAffinityEnabled ? 'translate-x-5' : 'translate-x-0'
-                ]"
-              />
-            </button>
-          </div>
-        </div>
       </div>
 
       <div class="border-t border-gray-200 pt-4 dark:border-dark-600">
@@ -2624,7 +2596,6 @@ const cacheTTLOverrideEnabled = ref(false)
 const cacheTTLOverrideTarget = ref<string>('5m')
 const customBaseUrlEnabled = ref(false)
 const customBaseUrl = ref('')
-const stickyUpstreamSiteAffinityEnabled = ref(false)
 
 // OpenAI 自动透传开关（OAuth/API Key）
 const openaiPassthroughEnabled = ref(false)
@@ -2825,9 +2796,6 @@ const normalizeOpenAIResponsesMode = (mode: unknown): OpenAIResponsesMode => {
 }
 const isOpenAIModelRestrictionDisabled = computed(() =>
   props.account?.platform === 'openai' && openaiPassthroughEnabled.value
-)
-const showUpstreamSiteAffinity = computed(() =>
-  props.account?.platform === 'openai' || props.account?.platform === 'anthropic'
 )
 const openAIResponsesStatusKey = computed(() => {
   if (openAIResponsesMode.value === 'force_responses') {
@@ -3514,7 +3482,6 @@ function loadQuotaControlSettings(account: Account) {
   cacheTTLOverrideTarget.value = '5m'
   customBaseUrlEnabled.value = false
   customBaseUrl.value = ''
-  stickyUpstreamSiteAffinityEnabled.value = false
 
   // Remaining quota control settings only apply to Anthropic accounts
   if (account.platform !== 'anthropic') {
@@ -3573,9 +3540,6 @@ function loadQuotaControlSettings(account: Account) {
     customBaseUrl.value = account.custom_base_url || ''
   }
 
-  if (account.sticky_upstream_site_affinity === true) {
-    stickyUpstreamSiteAffinityEnabled.value = true
-  }
 }
 
 function formatTempUnschedKeywords(value: unknown) {
@@ -4117,12 +4081,6 @@ const handleSubmit = async () => {
       } else {
         delete newExtra.custom_base_url_enabled
         delete newExtra.custom_base_url
-      }
-
-      if (stickyUpstreamSiteAffinityEnabled.value) {
-        newExtra.sticky_upstream_site_affinity = true
-      } else {
-        delete newExtra.sticky_upstream_site_affinity
       }
 
       updatePayload.extra = newExtra

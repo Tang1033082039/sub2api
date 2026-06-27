@@ -160,6 +160,16 @@ const openAIAllowCodexPluginCacheTTL = 60 * time.Second
 const openAIAllowCodexPluginErrorTTL = 5 * time.Second
 const openAIAllowCodexPluginDBTimeout = 5 * time.Second
 
+// cachedUpstreamSiteAffinity 上游站点亲和全局开关缓存（进程内缓存，5s TTL）。
+type cachedUpstreamSiteAffinity struct {
+	value     bool
+	expiresAt int64 // unix nano
+}
+
+const upstreamSiteAffinityCacheTTL = 5 * time.Second
+const upstreamSiteAffinityErrorTTL = 1 * time.Second
+const upstreamSiteAffinityDBTimeout = 5 * time.Second
+
 // cachedCyberSessionBlockRuntime cyber 会话屏蔽开关+TTL 进程内缓存（60s TTL）。
 // GetCyberSessionBlockRuntime 在网关请求热路径上被调用，避免每次访问 DB。
 type cachedCyberSessionBlockRuntime struct {
@@ -202,6 +212,8 @@ type SettingService struct {
 	openAICodexUASF             singleflight.Group
 	openAIAllowCodexPluginCache atomic.Value // *cachedOpenAIAllowCodexPlugin
 	openAIAllowCodexPluginSF    singleflight.Group
+	upstreamSiteAffinityCache   atomic.Value // *cachedUpstreamSiteAffinity
+	upstreamSiteAffinitySF      singleflight.Group
 
 	cyberSessionBlockRuntimeCache atomic.Value // *cachedCyberSessionBlockRuntime
 	cyberSessionBlockRuntimeSF    singleflight.Group
@@ -1184,6 +1196,50 @@ func (s *SettingService) IsOpenAIAllowClaudeCodeCodexPluginEnabled(ctx context.C
 	return false
 }
 
+// IsUpstreamSiteAffinityEnabled 全局开关：是否启用上游站点亲和（默认关闭）。
+func (s *SettingService) IsUpstreamSiteAffinityEnabled(ctx context.Context) bool {
+	if cached, ok := s.upstreamSiteAffinityCache.Load().(*cachedUpstreamSiteAffinity); ok && cached != nil {
+		if time.Now().UnixNano() < cached.expiresAt {
+			return cached.value
+		}
+	}
+	result, _, _ := s.upstreamSiteAffinitySF.Do("upstream_site_affinity_enabled", func() (any, error) {
+		if cached, ok := s.upstreamSiteAffinityCache.Load().(*cachedUpstreamSiteAffinity); ok && cached != nil {
+			if time.Now().UnixNano() < cached.expiresAt {
+				return cached.value, nil
+			}
+		}
+		dbCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), upstreamSiteAffinityDBTimeout)
+		defer cancel()
+		value, err := s.settingRepo.GetValue(dbCtx, SettingKeyUpstreamSiteAffinityEnabled)
+		if err != nil {
+			if errors.Is(err, ErrSettingNotFound) {
+				s.upstreamSiteAffinityCache.Store(&cachedUpstreamSiteAffinity{
+					value:     false,
+					expiresAt: time.Now().Add(upstreamSiteAffinityCacheTTL).UnixNano(),
+				})
+				return false, nil
+			}
+			slog.Warn("failed to get upstream_site_affinity_enabled setting", "error", err)
+			s.upstreamSiteAffinityCache.Store(&cachedUpstreamSiteAffinity{
+				value:     false,
+				expiresAt: time.Now().Add(upstreamSiteAffinityErrorTTL).UnixNano(),
+			})
+			return false, nil
+		}
+		enabled := value == "true"
+		s.upstreamSiteAffinityCache.Store(&cachedUpstreamSiteAffinity{
+			value:     enabled,
+			expiresAt: time.Now().Add(upstreamSiteAffinityCacheTTL).UnixNano(),
+		})
+		return enabled, nil
+	})
+	if val, ok := result.(bool); ok {
+		return val
+	}
+	return false
+}
+
 // SetOnUpdateCallback sets a callback function to be called when settings are updated
 // This is used for cache invalidation (e.g., HTML cache in frontend server)
 func (s *SettingService) SetOnUpdateCallback(callback func()) {
@@ -2000,6 +2056,7 @@ func (s *SettingService) buildSystemSettingsUpdates(ctx context.Context, setting
 	updates[SettingKeyAntigravityUserAgentVersion] = antigravity.NormalizeUserAgentVersion(settings.AntigravityUserAgentVersion)
 	updates[SettingKeyOpenAICodexUserAgent] = strings.TrimSpace(settings.OpenAICodexUserAgent)
 	updates[SettingKeyOpenAIAllowClaudeCodeCodexPlugin] = strconv.FormatBool(settings.OpenAIAllowClaudeCodeCodexPlugin)
+	updates[SettingKeyUpstreamSiteAffinityEnabled] = strconv.FormatBool(settings.UpstreamSiteAffinityEnabled)
 	updates[SettingPaymentVisibleMethodAlipaySource] = settings.PaymentVisibleMethodAlipaySource
 	updates[SettingPaymentVisibleMethodWxpaySource] = settings.PaymentVisibleMethodWxpaySource
 	updates[SettingPaymentVisibleMethodAlipayEnabled] = strconv.FormatBool(settings.PaymentVisibleMethodAlipayEnabled)
@@ -2172,6 +2229,11 @@ func (s *SettingService) refreshCachedSettings(settings *SystemSettings) {
 	s.openAIAllowCodexPluginCache.Store(&cachedOpenAIAllowCodexPlugin{
 		value:     settings.OpenAIAllowClaudeCodeCodexPlugin,
 		expiresAt: time.Now().Add(openAIAllowCodexPluginCacheTTL).UnixNano(),
+	})
+	s.upstreamSiteAffinitySF.Forget("upstream_site_affinity_enabled")
+	s.upstreamSiteAffinityCache.Store(&cachedUpstreamSiteAffinity{
+		value:     settings.UpstreamSiteAffinityEnabled,
+		expiresAt: time.Now().Add(upstreamSiteAffinityCacheTTL).UnixNano(),
 	})
 	if s.onUpdate != nil {
 		s.onUpdate() // Invalidate cache after settings update
@@ -3492,6 +3554,7 @@ func (s *SettingService) parseSettings(settings map[string]string) *SystemSettin
 	result.AntigravityUserAgentVersion = antigravity.NormalizeUserAgentVersion(settings[SettingKeyAntigravityUserAgentVersion])
 	result.OpenAICodexUserAgent = strings.TrimSpace(settings[SettingKeyOpenAICodexUserAgent])
 	result.OpenAIAllowClaudeCodeCodexPlugin = settings[SettingKeyOpenAIAllowClaudeCodeCodexPlugin] == "true"
+	result.UpstreamSiteAffinityEnabled = settings[SettingKeyUpstreamSiteAffinityEnabled] == "true"
 
 	// Web search emulation: quick enabled check from the JSON config
 	if raw := settings[SettingKeyWebSearchEmulationConfig]; raw != "" {

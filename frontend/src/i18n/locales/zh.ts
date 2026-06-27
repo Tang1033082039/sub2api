@@ -1434,9 +1434,9 @@ export default {
   // Admin
   admin: {
     // Dashboard
-    dashboard: {
-      title: '管理控制台',
-      description: '系统概览与统计数据',
+      dashboard: {
+        title: '管理控制台',
+        description: '系统概览与统计数据',
       apiKeys: 'API 密钥',
       totalApiKeys: 'API 密钥总数',
       activeApiKeys: '活跃密钥',
@@ -1475,8 +1475,9 @@ export default {
       group: '分组',
       noGroup: '无分组',
       requests: '请求',
-      tokens: 'Token',
-      cache: '缓存',
+        tokens: 'Token',
+        cacheRate: '缓存率',
+        cache: '缓存',
       recentUsage: '最近使用',
       viewModelDistribution: '模型分布',
       viewSpendingRanking: '用户消费榜',
@@ -5953,6 +5954,8 @@ export default {
         openaiAllowClaudeCodeCodexPlugin: '允许在 Claude Code 中使用 Codex 插件',
         openaiAllowClaudeCodeCodexPluginDesc:
           '全局开关，仅对已开启「仅允许 Codex 官方客户端」的 OpenAI OAuth 账号生效。开启后，所有此类账号都额外放行通过 Claude Code 的 Codex 插件发起的请求（精确匹配 originator=Claude Code），无需逐账号配置；上游请求仍保持透传。',
+        upstreamSiteAffinity: '上游站点亲和',
+        upstreamSiteAffinityDesc: '全局开关。开启后，OpenAI 和 Anthropic 账号会优先复用同一 Base URL 的上游账号。',
       },
       webSearchEmulation: {
         title: 'Web Search 模拟',

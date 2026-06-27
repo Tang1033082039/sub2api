@@ -2473,34 +2473,6 @@
           </div>
         </div>
 
-        <div
-          v-if="showUpstreamSiteAffinity"
-          class="rounded-lg border border-gray-200 p-4 dark:border-dark-600"
-        >
-          <div class="flex items-center justify-between">
-            <div>
-              <label class="input-label mb-0">{{ t('admin.accounts.quotaControl.upstreamSiteAffinity.label') }}</label>
-              <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
-                {{ t('admin.accounts.quotaControl.upstreamSiteAffinity.hint') }}
-              </p>
-            </div>
-            <button
-              type="button"
-              @click="stickyUpstreamSiteAffinityEnabled = !stickyUpstreamSiteAffinityEnabled"
-              :class="[
-                'relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2',
-                stickyUpstreamSiteAffinityEnabled ? 'bg-primary-600' : 'bg-gray-200 dark:bg-dark-600'
-              ]"
-            >
-              <span
-                :class="[
-                  'pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out',
-                  stickyUpstreamSiteAffinityEnabled ? 'translate-x-5' : 'translate-x-0'
-                ]"
-              />
-            </button>
-          </div>
-        </div>
       </div>
 
       <div>
@@ -3626,8 +3598,6 @@ const cacheTTLOverrideEnabled = ref(false)
 const cacheTTLOverrideTarget = ref<string>('5m')
 const customBaseUrlEnabled = ref(false)
 const customBaseUrl = ref('')
-const stickyUpstreamSiteAffinityEnabled = ref(false)
-
 // Gemini tier selection (used as fallback when auto-detection is unavailable/fails)
 const geminiTierGoogleOne = ref<'google_one_free' | 'google_ai_pro' | 'google_ai_ultra'>('google_one_free')
 const geminiTierGcp = ref<'gcp_standard' | 'gcp_enterprise'>('gcp_standard')
@@ -3675,8 +3645,6 @@ const openAIWSModeConcurrencyHintKey = computed(() =>
 const isOpenAIModelRestrictionDisabled = computed(() =>
   form.platform === 'openai' && openaiPassthroughEnabled.value
 )
-const showUpstreamSiteAffinity = computed(() => form.platform === 'openai' || form.platform === 'anthropic')
-
 const mixedChannelWarningMessageText = computed(() => {
   if (mixedChannelWarningDetails.value) {
     return t('admin.accounts.mixedChannelWarning', mixedChannelWarningDetails.value)
@@ -4320,7 +4288,6 @@ const resetForm = () => {
   cacheTTLOverrideTarget.value = '5m'
   customBaseUrlEnabled.value = false
   customBaseUrl.value = ''
-  stickyUpstreamSiteAffinityEnabled.value = false
   allowOverages.value = false
   antigravityAccountType.value = 'oauth'
   antigravityProjectId.value = ''
@@ -4402,12 +4369,6 @@ const buildOpenAIExtra = (base?: Record<string, unknown>): Record<string, unknow
     extra.openai_responses_mode = openAIResponsesMode.value
   } else {
     delete extra.openai_responses_mode
-  }
-
-  if (stickyUpstreamSiteAffinityEnabled.value) {
-    extra.sticky_upstream_site_affinity = true
-  } else {
-    delete extra.sticky_upstream_site_affinity
   }
 
   return Object.keys(extra).length > 0 ? extra : undefined
@@ -5456,12 +5417,6 @@ const handleAnthropicExchange = async (authCode: string) => {
       extra.custom_base_url_enabled = true
       extra.custom_base_url = customBaseUrl.value.trim()
     }
-    if (stickyUpstreamSiteAffinityEnabled.value) {
-      extra.sticky_upstream_site_affinity = true
-    } else {
-      delete extra.sticky_upstream_site_affinity
-    }
-
     const credentials: Record<string, unknown> = { ...tokenInfo }
     applyInterceptWarmup(credentials, interceptWarmupRequests.value, 'create')
     await createAccountAndFinish(form.platform, addMethod.value as AccountType, credentials, extra)
@@ -5584,12 +5539,6 @@ const handleCookieAuth = async (sessionKey: string) => {
           extra.custom_base_url_enabled = true
           extra.custom_base_url = customBaseUrl.value.trim()
         }
-        if (stickyUpstreamSiteAffinityEnabled.value) {
-          extra.sticky_upstream_site_affinity = true
-        } else {
-          delete extra.sticky_upstream_site_affinity
-        }
-
         const accountName = keys.length > 1 ? `${form.name} #${i + 1}` : form.name
 
         const credentials: Record<string, unknown> = { ...tokenInfo }
