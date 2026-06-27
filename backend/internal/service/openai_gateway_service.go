@@ -1649,7 +1649,7 @@ func (s *OpenAIGatewayService) selectAccountForModelWithExclusions(ctx context.C
 	}
 
 	preferredSiteKey := ""
-	if stickyAccountID > 0 && s.accountRepo != nil {
+	if s.settingService != nil && s.settingService.IsUpstreamSiteAffinityEnabled(ctx) && stickyAccountID > 0 && s.accountRepo != nil {
 		if stickyAccount, err := s.accountRepo.GetByID(ctx, stickyAccountID); err == nil && stickyAccount != nil {
 			preferredSiteKey = accountUpstreamSiteKey(stickyAccount)
 		}

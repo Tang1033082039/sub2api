@@ -1649,7 +1649,7 @@ func (s *GatewayService) SelectAccountForModelWithExclusions(ctx context.Context
 	}
 
 	var preferredSiteKey string
-	if sessionHash != "" && s.cache != nil {
+	if s.settingService != nil && s.settingService.IsUpstreamSiteAffinityEnabled(ctx) && sessionHash != "" && s.cache != nil {
 		if accountID, err := s.cache.GetSessionAccountID(ctx, derefGroupID(groupID), sessionHash); err == nil && accountID > 0 {
 			if account, err := s.accountRepo.GetByID(ctx, accountID); err == nil && account != nil {
 				preferredSiteKey = accountUpstreamSiteKey(account)
