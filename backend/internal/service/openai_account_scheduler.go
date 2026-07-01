@@ -50,6 +50,7 @@ type OpenAIAccountScheduleRequest struct {
 	RequireCompact          bool
 	ExcludedIDs             map[int64]struct{}
 	PreferredSiteKey        string
+	CacheSensitive          bool
 }
 
 type OpenAIAccountScheduleDecision struct {
@@ -62,6 +63,8 @@ type OpenAIAccountScheduleDecision struct {
 	LoadSkew            float64
 	SelectedAccountID   int64
 	SelectedAccountType string
+	CacheSensitive      bool
+	PreferredSiteKey    string
 }
 
 type OpenAIAccountSchedulerMetricsSnapshot struct {
@@ -264,6 +267,8 @@ func (s *defaultOpenAIAccountScheduler) Select(
 	req OpenAIAccountScheduleRequest,
 ) (*AccountSelectionResult, OpenAIAccountScheduleDecision, error) {
 	decision := OpenAIAccountScheduleDecision{}
+	decision.CacheSensitive = req.CacheSensitive
+	decision.PreferredSiteKey = strings.TrimSpace(req.PreferredSiteKey)
 	start := time.Now()
 	defer func() {
 		decision.LatencyMs = time.Since(start).Milliseconds()
@@ -385,14 +390,25 @@ func (s *defaultOpenAIAccountScheduler) selectBySessionHash(
 		return nil, false, nil
 	}
 	escapeCfg := s.service.openAIStickyEscapeConfig()
-	if reason, errorRate, ttft, shouldEscape := s.shouldEscapeStickyAccount(accountID, escapeCfg); shouldEscape {
+	if !req.CacheSensitive {
+		if reason, errorRate, ttft, shouldEscape := s.shouldEscapeStickyAccount(accountID, escapeCfg); shouldEscape {
+			slog.Info("sticky_escape_triggered",
+				"account_id", accountID,
+				"reason", reason,
+				"error_rate", errorRate,
+				"ttft", ttft,
+			)
+			return nil, true, nil
+		}
+	} else if reason, errorRate, ttft, shouldEscape := s.shouldEscapeStickyAccount(accountID, escapeCfg); shouldEscape {
 		slog.Info("sticky_escape_triggered",
 			"account_id", accountID,
 			"reason", reason,
 			"error_rate", errorRate,
 			"ttft", ttft,
+			"cache_sensitive", true,
+			"action", "keep_sticky",
 		)
-		return nil, true, nil
 	}
 	result, acquireErr := s.service.tryAcquireAccountSlot(ctx, accountID, account.Concurrency)
 	if acquireErr == nil && result != nil && result.Acquired {
@@ -407,7 +423,7 @@ func (s *defaultOpenAIAccountScheduler) selectBySessionHash(
 	cfg := s.service.schedulingConfig()
 	// WaitPlan.MaxConcurrency 使用 Concurrency（非 EffectiveLoadFactor），因为 WaitPlan 控制的是 Redis 实际并发槽位等待。
 	if s.service.concurrencyService != nil {
-		if escapeCfg.enabled && acquireErr == nil && result != nil && !result.Acquired {
+		if !req.CacheSensitive && escapeCfg.enabled && acquireErr == nil && result != nil && !result.Acquired {
 			errorRate, ttft, _ := s.stats.snapshot(accountID)
 			slog.Info("sticky_escape_triggered",
 				"account_id", accountID,
@@ -417,8 +433,20 @@ func (s *defaultOpenAIAccountScheduler) selectBySessionHash(
 			)
 			return nil, true, nil
 		}
+		if req.CacheSensitive && escapeCfg.enabled && acquireErr == nil && result != nil && !result.Acquired {
+			errorRate, ttft, _ := s.stats.snapshot(accountID)
+			slog.Info("sticky_escape_triggered",
+				"account_id", accountID,
+				"reason", "concurrency_full",
+				"error_rate", errorRate,
+				"ttft", ttft,
+				"cache_sensitive", true,
+				"action", "wait_sticky",
+			)
+		}
 		return &AccountSelectionResult{
-			Account: account,
+			Account:               account,
+			PreserveStickyBinding: req.PreserveStickyBinding,
 			WaitPlan: &AccountWaitPlan{
 				AccountID:      accountID,
 				MaxConcurrency: account.Concurrency,
@@ -922,13 +950,28 @@ func (s *defaultOpenAIAccountScheduler) tryAcquireOpenAISelectionOrder(
 				_ = s.service.BindStickySession(ctx, req.GroupID, req.SessionHash, fresh.ID)
 			}
 			return &AccountSelectionResult{
-				Account:     fresh,
-				Acquired:    true,
-				ReleaseFunc: result.ReleaseFunc,
+				Account:               fresh,
+				Acquired:              true,
+				ReleaseFunc:           result.ReleaseFunc,
+				PreserveStickyBinding: req.PreserveStickyBinding,
 			}, compactBlocked, nil
 		}
 	}
 	return nil, compactBlocked, nil
+}
+
+func filterOpenAISelectionOrderBySite(selectionOrder []openAIAccountCandidateScore, siteKey string) []openAIAccountCandidateScore {
+	siteKey = strings.TrimSpace(siteKey)
+	if siteKey == "" || len(selectionOrder) == 0 {
+		return selectionOrder
+	}
+	filtered := make([]openAIAccountCandidateScore, 0, len(selectionOrder))
+	for _, candidate := range selectionOrder {
+		if openAIAccountSiteKey(candidate.account) == siteKey {
+			filtered = append(filtered, candidate)
+		}
+	}
+	return filtered
 }
 
 func (s *defaultOpenAIAccountScheduler) selectByLoadBalance(
@@ -949,6 +992,8 @@ func (s *defaultOpenAIAccountScheduler) selectByLoadBalance(
 		schedGroup, _ = s.service.schedulerSnapshot.GetGroupByID(ctx, *req.GroupID)
 	}
 
+	preferredSite := strings.TrimSpace(req.PreferredSiteKey)
+	stickToPreferredSite := req.CacheSensitive && preferredSite != ""
 	filtered := make([]*Account, 0, len(accounts))
 	loadReq := make([]AccountWithConcurrency, 0, len(accounts))
 	for i := range accounts {
@@ -962,6 +1007,9 @@ func (s *defaultOpenAIAccountScheduler) selectByLoadBalance(
 			continue
 		}
 		if s.service.isOpenAIAccountRuntimeBlocked(account) {
+			continue
+		}
+		if stickToPreferredSite && openAIAccountSiteKey(account) != preferredSite {
 			continue
 		}
 		// require_privacy_set: 跳过 privacy 未设置的账号并标记异常
@@ -999,7 +1047,6 @@ func (s *defaultOpenAIAccountScheduler) selectByLoadBalance(
 	topK := plan.topK
 	loadSkew := plan.loadSkew
 	selectionOrder := plan.selectionOrder
-	preferredSite := strings.TrimSpace(req.PreferredSiteKey)
 	if req.RequireCompact && len(plan.candidates) == 0 && len(plan.staleSnapshotCompactRetry) == 0 {
 		return nil, 0, 0, 0, ErrNoAvailableCompactAccounts
 	}
@@ -1027,23 +1074,34 @@ func (s *defaultOpenAIAccountScheduler) selectByLoadBalance(
 			if result != nil {
 				return result, candidateCount, topK, loadSkew, nil
 			}
+			if stickToPreferredSite {
+				selectionOrder = sameSite
+			}
+		} else if stickToPreferredSite {
+			return nil, candidateCount, topK, loadSkew, noAvailableOpenAISelectionError(req.RequestedModel, req.RequireCompact && len(plan.allCandidates) > 0)
 		}
 	}
 
-	result, selectionCompactBlocked, acquireErr := s.tryAcquireOpenAISelectionOrder(ctx, req, selectionOrder)
-	if acquireErr != nil {
-		return nil, candidateCount, topK, loadSkew, acquireErr
-	}
-	compactBlocked = compactBlocked || selectionCompactBlocked
-	if result != nil {
-		return result, candidateCount, topK, loadSkew, nil
+	if !stickToPreferredSite {
+		result, selectionCompactBlocked, acquireErr := s.tryAcquireOpenAISelectionOrder(ctx, req, selectionOrder)
+		if acquireErr != nil {
+			return nil, candidateCount, topK, loadSkew, acquireErr
+		}
+		compactBlocked = compactBlocked || selectionCompactBlocked
+		if result != nil {
+			return result, candidateCount, topK, loadSkew, nil
+		}
 	}
 
 	if s.service.concurrencyService != nil {
 		if freshLoadMap, loadErr := s.service.concurrencyService.GetAccountsLoadBatchFresh(ctx, loadReq); loadErr == nil {
 			freshPlan := s.buildOpenAIAccountLoadPlan(req, filtered, freshLoadMap)
-			if len(freshPlan.selectionOrder) > 0 {
-				freshResult, freshCompactBlocked, freshAcquireErr := s.tryAcquireOpenAISelectionOrder(ctx, req, freshPlan.selectionOrder)
+			freshSelectionOrder := freshPlan.selectionOrder
+			if stickToPreferredSite {
+				freshSelectionOrder = filterOpenAISelectionOrderBySite(freshSelectionOrder, preferredSite)
+			}
+			if len(freshSelectionOrder) > 0 {
+				freshResult, freshCompactBlocked, freshAcquireErr := s.tryAcquireOpenAISelectionOrder(ctx, req, freshSelectionOrder)
 				if freshAcquireErr != nil {
 					return nil, candidateCount, topK, loadSkew, freshAcquireErr
 				}
@@ -1051,7 +1109,7 @@ func (s *defaultOpenAIAccountScheduler) selectByLoadBalance(
 					return freshResult, freshPlan.candidateCount, freshPlan.topK, freshPlan.loadSkew, nil
 				}
 				compactBlocked = compactBlocked || freshCompactBlocked
-				selectionOrder = freshPlan.selectionOrder
+				selectionOrder = freshSelectionOrder
 				candidateCount = freshPlan.candidateCount
 				topK = freshPlan.topK
 				loadSkew = freshPlan.loadSkew
@@ -1075,7 +1133,8 @@ func (s *defaultOpenAIAccountScheduler) selectByLoadBalance(
 			continue
 		}
 		return &AccountSelectionResult{
-			Account: fresh,
+			Account:               fresh,
+			PreserveStickyBinding: req.PreserveStickyBinding,
 			WaitPlan: &AccountWaitPlan{
 				AccountID:      fresh.ID,
 				MaxConcurrency: fresh.Concurrency,
@@ -1293,13 +1352,34 @@ func (s *OpenAIGatewayService) selectAccountWithScheduler(
 ) (*AccountSelectionResult, OpenAIAccountScheduleDecision, error) {
 	ctx = s.withOpenAIQuotaAutoPauseContext(ctx)
 	decision := OpenAIAccountScheduleDecision{}
+	var stickyAccountID int64
+	if sessionHash != "" && s.cache != nil {
+		if accountID, err := s.getStickySessionAccountID(ctx, groupID, sessionHash); err == nil && accountID > 0 {
+			stickyAccountID = accountID
+		}
+	}
+	cacheSensitive := isOpenAICacheSensitiveScheduleRequest(sessionHash, previousResponseID)
+	preferredSiteKey := ""
+	preferredSiteCooling := false
+	if cacheSensitive && stickyAccountID > 0 && s.settingService != nil && s.settingService.IsUpstreamSiteAffinityEnabled(ctx) {
+		preferredSiteKey = openAIAccountSiteKey(mustAccountByID(s, ctx, stickyAccountID))
+		if preferredSiteKey != "" && s.cache != nil {
+			if cooling, err := s.cache.IsUpstreamSiteCooling(ctx, preferredSiteKey); err == nil && cooling {
+				preferredSiteCooling = true
+				preferredSiteKey = ""
+			}
+		}
+	}
+	decision.CacheSensitive = cacheSensitive
+	decision.PreferredSiteKey = preferredSiteKey
 	scheduler := s.getOpenAIAccountScheduler(ctx)
 	if scheduler == nil {
 		decision.Layer = openAIAccountScheduleLayerLoadBalance
 		if requiredTransport == OpenAIUpstreamTransportAny || requiredTransport == OpenAIUpstreamTransportHTTPSSE {
 			effectiveExcludedIDs := cloneExcludedAccountIDs(excludedIDs)
 			for {
-				selection, err := s.selectAccountWithLoadAwareness(ctx, groupID, sessionHash, requestedModel, effectiveExcludedIDs, requireCompact, requiredCapability)
+				preserveStickyBinding := preferredSiteCooling || shouldPreserveOpenAIStickyBinding(cacheSensitive, stickyAccountID, effectiveExcludedIDs)
+				selection, err := s.selectAccountWithLoadAwareness(ctx, groupID, sessionHash, requestedModel, effectiveExcludedIDs, requireCompact, requiredCapability, preserveStickyBinding, preferredSiteKey)
 				if err != nil {
 					return nil, decision, err
 				}
@@ -1324,7 +1404,8 @@ func (s *OpenAIGatewayService) selectAccountWithScheduler(
 
 		effectiveExcludedIDs := cloneExcludedAccountIDs(excludedIDs)
 		for {
-			selection, err := s.selectAccountWithLoadAwareness(ctx, groupID, sessionHash, requestedModel, effectiveExcludedIDs, requireCompact, requiredCapability)
+			preserveStickyBinding := preferredSiteCooling || shouldPreserveOpenAIStickyBinding(cacheSensitive, stickyAccountID, effectiveExcludedIDs)
+			selection, err := s.selectAccountWithLoadAwareness(ctx, groupID, sessionHash, requestedModel, effectiveExcludedIDs, requireCompact, requiredCapability, preserveStickyBinding, preferredSiteKey)
 			if err != nil {
 				return nil, decision, err
 			}
@@ -1355,17 +1436,11 @@ func (s *OpenAIGatewayService) selectAccountWithScheduler(
 		return nil, decision, fmt.Errorf("%w supporting model: %s (channel pricing restriction)", ErrNoAvailableAccounts, requestedModel)
 	}
 
-	var stickyAccountID int64
-	if sessionHash != "" && s.cache != nil {
-		if accountID, err := s.getStickySessionAccountID(ctx, groupID, sessionHash); err == nil && accountID > 0 {
-			stickyAccountID = accountID
-		}
-	}
-
 	return scheduler.Select(ctx, OpenAIAccountScheduleRequest{
 		GroupID:                 groupID,
 		SessionHash:             sessionHash,
 		StickyAccountID:         stickyAccountID,
+		PreserveStickyBinding:   preferredSiteCooling || shouldPreserveOpenAIStickyBinding(cacheSensitive, stickyAccountID, excludedIDs),
 		PreviousResponseID:      previousResponseID,
 		RequestedModel:          requestedModel,
 		RequiredTransport:       requiredTransport,
@@ -1373,8 +1448,21 @@ func (s *OpenAIGatewayService) selectAccountWithScheduler(
 		RequiredImageCapability: requiredImageCapability,
 		RequireCompact:          requireCompact,
 		ExcludedIDs:             excludedIDs,
-		PreferredSiteKey:        openAIAccountSiteKey(mustAccountByID(s, ctx, stickyAccountID)),
+		PreferredSiteKey:        preferredSiteKey,
+		CacheSensitive:          cacheSensitive,
 	})
+}
+
+func isOpenAICacheSensitiveScheduleRequest(sessionHash, previousResponseID string) bool {
+	return strings.TrimSpace(sessionHash) != "" || strings.TrimSpace(previousResponseID) != ""
+}
+
+func shouldPreserveOpenAIStickyBinding(cacheSensitive bool, stickyAccountID int64, excludedIDs map[int64]struct{}) bool {
+	if !cacheSensitive || stickyAccountID <= 0 || len(excludedIDs) == 0 {
+		return false
+	}
+	_, excluded := excludedIDs[stickyAccountID]
+	return excluded
 }
 
 func mustAccountByID(svc *OpenAIGatewayService, ctx context.Context, accountID int64) *Account {

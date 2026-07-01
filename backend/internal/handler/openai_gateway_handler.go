@@ -366,6 +366,8 @@ func (h *OpenAIGatewayHandler) Responses(c *gin.Context) {
 			zap.String("layer", scheduleDecision.Layer),
 			zap.Bool("sticky_previous_hit", scheduleDecision.StickyPreviousHit),
 			zap.Bool("sticky_session_hit", scheduleDecision.StickySessionHit),
+			zap.Bool("cache_sensitive", scheduleDecision.CacheSensitive),
+			zap.String("preferred_site_key", scheduleDecision.PreferredSiteKey),
 			zap.Int("candidate_count", scheduleDecision.CandidateCount),
 			zap.Int("top_k", scheduleDecision.TopK),
 			zap.Int64("latency_ms", scheduleDecision.LatencyMs),
@@ -781,8 +783,16 @@ func (h *OpenAIGatewayHandler) Messages(c *gin.Context) {
 		}
 		account := selection.Account
 		sessionHash = ensureOpenAIPoolModeSessionHash(sessionHash, account)
-		reqLog.Debug("openai_messages.account_selected", zap.Int64("account_id", account.ID), zap.String("account_name", account.Name))
-		_ = scheduleDecision
+		reqLog.Debug("openai_messages.account_selected",
+			zap.Int64("account_id", account.ID),
+			zap.String("account_name", account.Name),
+			zap.String("schedule_layer", scheduleDecision.Layer),
+			zap.Bool("sticky_session_hit", scheduleDecision.StickySessionHit),
+			zap.Bool("cache_sensitive", scheduleDecision.CacheSensitive),
+			zap.String("preferred_site_key", scheduleDecision.PreferredSiteKey),
+			zap.Int("candidate_count", scheduleDecision.CandidateCount),
+			zap.Int("top_k", scheduleDecision.TopK),
+		)
 		setOpsSelectedAccount(c, account.ID, account.Platform)
 
 		accountReleaseFunc, acquired := h.acquireResponsesAccountSlot(c, apiKey.GroupID, sessionHash, selection, reqStream, &streamStarted, reqLog)
@@ -1087,8 +1097,12 @@ func (h *OpenAIGatewayHandler) acquireResponsesAccountSlot(
 		return nil, false
 	}
 	if fastAcquired {
-		if err := h.gatewayService.BindStickySession(ctx, groupID, sessionHash, account.ID); err != nil {
-			reqLog.Warn("openai.bind_sticky_session_failed", zap.Int64("account_id", account.ID), zap.Error(err))
+		if !selection.PreserveStickyBinding {
+			if err := h.gatewayService.BindStickySession(ctx, groupID, sessionHash, account.ID); err != nil {
+				reqLog.Warn("openai.bind_sticky_session_failed", zap.Int64("account_id", account.ID), zap.Error(err))
+			}
+		} else {
+			reqLog.Debug("openai.preserve_sticky_binding", zap.Int64("account_id", account.ID))
 		}
 		return wrapReleaseOnDone(ctx, fastReleaseFunc), true
 	}
@@ -1130,8 +1144,12 @@ func (h *OpenAIGatewayHandler) acquireResponsesAccountSlot(
 
 	// Slot acquired: no longer waiting in queue.
 	releaseWait()
-	if err := h.gatewayService.BindStickySession(ctx, groupID, sessionHash, account.ID); err != nil {
-		reqLog.Warn("openai.bind_sticky_session_failed", zap.Int64("account_id", account.ID), zap.Error(err))
+	if !selection.PreserveStickyBinding {
+		if err := h.gatewayService.BindStickySession(ctx, groupID, sessionHash, account.ID); err != nil {
+			reqLog.Warn("openai.bind_sticky_session_failed", zap.Int64("account_id", account.ID), zap.Error(err))
+		}
+	} else {
+		reqLog.Debug("openai.preserve_sticky_binding", zap.Int64("account_id", account.ID))
 	}
 	return wrapReleaseOnDone(ctx, accountReleaseFunc), true
 }
@@ -1387,8 +1405,12 @@ func (h *OpenAIGatewayHandler) ResponsesWebSocket(c *gin.Context) {
 			accountReleaseFunc = fastReleaseFunc
 		}
 		currentAccountRelease = wrapReleaseOnDone(ctx, accountReleaseFunc)
-		if err := h.gatewayService.BindStickySession(ctx, apiKey.GroupID, sessionHash, account.ID); err != nil {
-			reqLog.Warn("openai.websocket_bind_sticky_session_failed", zap.Int64("account_id", account.ID), zap.Error(err))
+		if !selection.PreserveStickyBinding {
+			if err := h.gatewayService.BindStickySession(ctx, apiKey.GroupID, sessionHash, account.ID); err != nil {
+				reqLog.Warn("openai.websocket_bind_sticky_session_failed", zap.Int64("account_id", account.ID), zap.Error(err))
+			}
+		} else {
+			reqLog.Debug("openai.websocket_preserve_sticky_binding", zap.Int64("account_id", account.ID))
 		}
 
 		token, _, err := h.gatewayService.GetAccessToken(ctx, account)
@@ -1402,7 +1424,11 @@ func (h *OpenAIGatewayHandler) ResponsesWebSocket(c *gin.Context) {
 			zap.Int64("account_id", account.ID),
 			zap.String("account_name", account.Name),
 			zap.String("schedule_layer", scheduleDecision.Layer),
+			zap.Bool("sticky_session_hit", scheduleDecision.StickySessionHit),
+			zap.Bool("cache_sensitive", scheduleDecision.CacheSensitive),
+			zap.String("preferred_site_key", scheduleDecision.PreferredSiteKey),
 			zap.Int("candidate_count", scheduleDecision.CandidateCount),
+			zap.Int("top_k", scheduleDecision.TopK),
 		)
 
 		var requestPayloadHash string
