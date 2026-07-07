@@ -95,6 +95,9 @@ func (m *mockAccountRepoForPlatform) List(ctx context.Context, params pagination
 func (m *mockAccountRepoForPlatform) ListWithFilters(ctx context.Context, params pagination.PaginationParams, filters AccountListFilters) ([]Account, *pagination.PaginationResult, error) {
 	return nil, nil, nil
 }
+func (m *mockAccountRepoForPlatform) ListAllWithFilters(ctx context.Context, filters AccountListFilters) ([]Account, error) {
+	return nil, nil
+}
 func (m *mockAccountRepoForPlatform) ListByGroup(ctx context.Context, groupID int64) ([]Account, error) {
 	return nil, nil
 }
@@ -202,6 +205,10 @@ func (m *mockAccountRepoForPlatform) RevertProxyFallback(ctx context.Context, ac
 	return nil
 }
 
+func (m *mockAccountRepoForPlatform) ListShadowsByParent(ctx context.Context, parentID int64) ([]*Account, error) {
+	return nil, nil
+}
+
 // Verify interface implementation
 var _ AccountRepository = (*mockAccountRepoForPlatform)(nil)
 
@@ -244,6 +251,10 @@ func (m *mockGatewayCacheForPlatform) DeleteSessionAccountID(ctx context.Context
 
 func (m *mockGatewayCacheForPlatform) IsUpstreamSiteCooling(ctx context.Context, siteKey string) (bool, error) {
 	return false, nil
+}
+
+func (m *mockGatewayCacheForPlatform) SetUpstreamSiteCooldown(ctx context.Context, siteKey string, ttl time.Duration) error {
+	return nil
 }
 
 type mockGroupRepoForGateway struct {
@@ -2094,6 +2105,10 @@ func (m *mockConcurrencyCache) GetAccountsLoadBatch(ctx context.Context, account
 }
 
 func (m *mockConcurrencyCache) CleanupExpiredAccountSlots(ctx context.Context, accountID int64) error {
+	return nil
+}
+
+func (m *mockConcurrencyCache) CleanupExpiredAccountSlotKeys(ctx context.Context) error {
 	return nil
 }
 

@@ -82,6 +82,9 @@ func (m *mockAccountRepoForGemini) List(ctx context.Context, params pagination.P
 func (m *mockAccountRepoForGemini) ListWithFilters(ctx context.Context, params pagination.PaginationParams, filters AccountListFilters) ([]Account, *pagination.PaginationResult, error) {
 	return nil, nil, nil
 }
+func (m *mockAccountRepoForGemini) ListAllWithFilters(ctx context.Context, filters AccountListFilters) ([]Account, error) {
+	return nil, nil
+}
 func (m *mockAccountRepoForGemini) ListByGroup(ctx context.Context, groupID int64) ([]Account, error) {
 	return nil, nil
 }
@@ -191,6 +194,10 @@ func (m *mockAccountRepoForGemini) RevertProxyFallback(ctx context.Context, acco
 	return nil
 }
 
+func (m *mockAccountRepoForGemini) ListShadowsByParent(ctx context.Context, parentID int64) ([]*Account, error) {
+	return nil, nil
+}
+
 // Verify interface implementation
 var _ AccountRepository = (*mockAccountRepoForGemini)(nil)
 
@@ -297,6 +304,10 @@ func (m *mockGatewayCacheForGemini) DeleteSessionAccountID(ctx context.Context, 
 
 func (m *mockGatewayCacheForGemini) IsUpstreamSiteCooling(ctx context.Context, siteKey string) (bool, error) {
 	return false, nil
+}
+
+func (m *mockGatewayCacheForGemini) SetUpstreamSiteCooldown(ctx context.Context, siteKey string, ttl time.Duration) error {
+	return nil
 }
 
 // TestGeminiMessagesCompatService_SelectAccountForModelWithExclusions_GeminiPlatform 测试 Gemini 单平台选择

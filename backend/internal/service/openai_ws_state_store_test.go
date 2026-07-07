@@ -193,6 +193,14 @@ func (c *openAIWSStateStoreTimeoutProbeCache) DeleteSessionAccountID(ctx context
 	return nil
 }
 
+func (c *openAIWSStateStoreTimeoutProbeCache) SetUpstreamSiteCooldown(context.Context, string, time.Duration) error {
+	return nil
+}
+
+func (c *openAIWSStateStoreTimeoutProbeCache) IsUpstreamSiteCooling(context.Context, string) (bool, error) {
+	return false, nil
+}
+
 func TestOpenAIWSStateStore_RedisOpsUseShortTimeout(t *testing.T) {
 	probe := &openAIWSStateStoreTimeoutProbeCache{}
 	store := NewOpenAIWSStateStore(probe)

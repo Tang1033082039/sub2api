@@ -148,6 +148,10 @@ func (s *stickyGatewayCacheHotpathStub) IsUpstreamSiteCooling(ctx context.Contex
 	return false, nil
 }
 
+func (s *stickyGatewayCacheHotpathStub) SetUpstreamSiteCooldown(ctx context.Context, siteKey string, ttl time.Duration) error {
+	return nil
+}
+
 func (s *modelsListAccountRepoStub) ListSchedulableByGroupID(ctx context.Context, groupID int64) ([]Account, error) {
 	s.listByGroupCalls.Add(1)
 	if s.err != nil {

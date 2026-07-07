@@ -150,6 +150,9 @@ func (s *AccountTestService) ProbeOpenAIAPIKeyResponsesSupport(ctx context.Conte
 	req.Header.Set("Accept", "application/json")
 	req.Header.Set("User-Agent", openAIAccountTestProbeUserAgent)
 
+	// 账号级请求头覆写：能力探测与真实转发保持一致的最终头
+	account.ApplyHeaderOverrides(req.Header)
+
 	proxyURL := ""
 	if account.ProxyID != nil && account.Proxy != nil {
 		proxyURL = account.Proxy.URL()
