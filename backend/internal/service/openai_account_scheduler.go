@@ -79,6 +79,8 @@ type OpenAIAccountScheduleDecision struct {
 	Layer               string
 	StickyPreviousHit   bool
 	StickySessionHit    bool
+	CacheSensitive      bool
+	PreferredSiteKey    string
 	CandidateCount      int
 	TopK                int
 	LatencyMs           int64
@@ -297,7 +299,10 @@ func (s *defaultOpenAIAccountScheduler) Select(
 	ctx context.Context,
 	req OpenAIAccountScheduleRequest,
 ) (*AccountSelectionResult, OpenAIAccountScheduleDecision, error) {
-	decision := OpenAIAccountScheduleDecision{}
+	decision := OpenAIAccountScheduleDecision{
+		CacheSensitive:   strings.TrimSpace(req.SessionHash) != "" || strings.TrimSpace(req.PreviousResponseID) != "",
+		PreferredSiteKey: strings.TrimSpace(req.PreferredSiteKey),
+	}
 	start := time.Now()
 	defer func() {
 		decision.LatencyMs = time.Since(start).Milliseconds()
@@ -1002,9 +1007,10 @@ func (s *defaultOpenAIAccountScheduler) tryAcquireOpenAISelectionOrder(
 				_ = s.service.BindStickySession(ctx, req.GroupID, req.SessionHash, fresh.ID)
 			}
 			return &AccountSelectionResult{
-				Account:     fresh,
-				Acquired:    true,
-				ReleaseFunc: result.ReleaseFunc,
+				Account:               fresh,
+				Acquired:              true,
+				ReleaseFunc:           result.ReleaseFunc,
+				PreserveStickyBinding: req.PreserveStickyBinding,
 			}, compactBlocked, nil
 		}
 	}
@@ -1058,15 +1064,17 @@ func (s *defaultOpenAIAccountScheduler) tryFallbackToWeightedSticky(
 				_ = s.service.BindStickySession(ctx, req.GroupID, req.SessionHash, account.ID)
 			}
 			return &AccountSelectionResult{
-				Account:     account,
-				Acquired:    true,
-				ReleaseFunc: result.ReleaseFunc,
+				Account:               account,
+				Acquired:              true,
+				ReleaseFunc:           result.ReleaseFunc,
+				PreserveStickyBinding: req.PreserveStickyBinding,
 			}, nil
 		}
 		if s.service.concurrencyService != nil {
 			cfg := s.service.schedulingConfig()
 			return &AccountSelectionResult{
-				Account: account,
+				Account:               account,
+				PreserveStickyBinding: req.PreserveStickyBinding,
 				WaitPlan: &AccountWaitPlan{
 					AccountID:      account.ID,
 					MaxConcurrency: account.Concurrency,
@@ -1324,7 +1332,8 @@ func (s *defaultOpenAIAccountScheduler) finishLoadBalanceSelectionFallback(
 			continue
 		}
 		return &AccountSelectionResult{
-			Account: fresh,
+			Account:               fresh,
+			PreserveStickyBinding: req.PreserveStickyBinding,
 			WaitPlan: &AccountWaitPlan{
 				AccountID:      fresh.ID,
 				MaxConcurrency: fresh.Concurrency,
@@ -1709,7 +1718,9 @@ func (s *OpenAIGatewayService) selectAccountWithScheduler(
 ) (*AccountSelectionResult, OpenAIAccountScheduleDecision, error) {
 	ctx = s.withOpenAIQuotaAutoPauseContext(ctx)
 	platform = normalizeOpenAICompatiblePlatform(platform)
-	decision := OpenAIAccountScheduleDecision{}
+	decision := OpenAIAccountScheduleDecision{
+		CacheSensitive: strings.TrimSpace(sessionHash) != "" || strings.TrimSpace(previousResponseID) != "",
+	}
 	scheduler := s.getOpenAIAccountScheduler(ctx)
 	if scheduler == nil {
 		decision.Layer = openAIAccountScheduleLayerLoadBalance
