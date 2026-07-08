@@ -2095,6 +2095,10 @@ func init() {
 	userDescRpmLimit := userFields[20].Descriptor()
 	// user.DefaultRpmLimit holds the default value on creation for the rpm_limit field.
 	user.DefaultRpmLimit = userDescRpmLimit.Default.(int)
+	// userDescCodexContinueEnabled is the schema descriptor for codex_continue_enabled field.
+	userDescCodexContinueEnabled := userFields[21].Descriptor()
+	// user.DefaultCodexContinueEnabled holds the default value on creation for the codex_continue_enabled field.
+	user.DefaultCodexContinueEnabled = userDescCodexContinueEnabled.Default.(bool)
 	userallowedgroupFields := schema.UserAllowedGroup{}.Fields()
 	_ = userallowedgroupFields
 	// userallowedgroupDescCreatedAt is the schema descriptor for created_at field.

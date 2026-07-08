@@ -63,6 +63,8 @@ const (
 	FieldTotalRecharged = "total_recharged"
 	// FieldRpmLimit holds the string denoting the rpm_limit field in the database.
 	FieldRpmLimit = "rpm_limit"
+	// FieldCodexContinueEnabled holds the string denoting the codex_continue_enabled field in the database.
+	FieldCodexContinueEnabled = "codex_continue_enabled"
 	// EdgeAPIKeys holds the string denoting the api_keys edge name in mutations.
 	EdgeAPIKeys = "api_keys"
 	// EdgeRedeemCodes holds the string denoting the redeem_codes edge name in mutations.
@@ -218,6 +220,7 @@ var Columns = []string{
 	FieldBalanceNotifyExtraEmails,
 	FieldTotalRecharged,
 	FieldRpmLimit,
+	FieldCodexContinueEnabled,
 }
 
 var (
@@ -290,6 +293,8 @@ var (
 	DefaultTotalRecharged float64
 	// DefaultRpmLimit holds the default value on creation for the "rpm_limit" field.
 	DefaultRpmLimit int
+	// DefaultCodexContinueEnabled holds the default value on creation for the "codex_continue_enabled" field.
+	DefaultCodexContinueEnabled bool
 )
 
 // OrderOption defines the ordering options for the User queries.
@@ -418,6 +423,11 @@ func ByTotalRecharged(opts ...sql.OrderTermOption) OrderOption {
 // ByRpmLimit orders the results by the rpm_limit field.
 func ByRpmLimit(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldRpmLimit, opts...).ToFunc()
+}
+
+// ByCodexContinueEnabled orders the results by the codex_continue_enabled field.
+func ByCodexContinueEnabled(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldCodexContinueEnabled, opts...).ToFunc()
 }
 
 // ByAPIKeysCount orders the results by api_keys count.

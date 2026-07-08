@@ -2101,7 +2101,13 @@ func (s *OpenAIGatewayService) Forward(ctx context.Context, c *gin.Context, acco
 		imageCount := 0
 		var imageOutputSizes []string
 		if reqStream {
-			streamResult, err := s.handleStreamingResponse(ctx, resp, c, account, startTime, originalModel, upstreamModel)
+			var streamResult *openaiStreamingResult
+			var err error
+			if shouldUseCodexContinueFold(c, account, reqStream, isCodexCLI) {
+				streamResult, err = s.handleCodexContinueStreamingResponse(ctx, resp, c, account, body, token, promptCacheKey, isCodexCLI, startTime, originalModel, upstreamModel)
+			} else {
+				streamResult, err = s.handleStreamingResponse(ctx, resp, c, account, startTime, originalModel, upstreamModel)
+			}
 			if err != nil {
 				return nil, err
 			}

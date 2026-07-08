@@ -175,6 +175,11 @@ func RpmLimit(v int) predicate.User {
 	return predicate.User(sql.FieldEQ(FieldRpmLimit, v))
 }
 
+// CodexContinueEnabled applies equality check predicate on the "codex_continue_enabled" field. It's identical to CodexContinueEnabledEQ.
+func CodexContinueEnabled(v bool) predicate.User {
+	return predicate.User(sql.FieldEQ(FieldCodexContinueEnabled, v))
+}
+
 // CreatedAtEQ applies the EQ predicate on the "created_at" field.
 func CreatedAtEQ(v time.Time) predicate.User {
 	return predicate.User(sql.FieldEQ(FieldCreatedAt, v))
@@ -1383,6 +1388,16 @@ func RpmLimitLT(v int) predicate.User {
 // RpmLimitLTE applies the LTE predicate on the "rpm_limit" field.
 func RpmLimitLTE(v int) predicate.User {
 	return predicate.User(sql.FieldLTE(FieldRpmLimit, v))
+}
+
+// CodexContinueEnabledEQ applies the EQ predicate on the "codex_continue_enabled" field.
+func CodexContinueEnabledEQ(v bool) predicate.User {
+	return predicate.User(sql.FieldEQ(FieldCodexContinueEnabled, v))
+}
+
+// CodexContinueEnabledNEQ applies the NEQ predicate on the "codex_continue_enabled" field.
+func CodexContinueEnabledNEQ(v bool) predicate.User {
+	return predicate.User(sql.FieldNEQ(FieldCodexContinueEnabled, v))
 }
 
 // HasAPIKeys applies the HasEdge predicate on the "api_keys" edge.

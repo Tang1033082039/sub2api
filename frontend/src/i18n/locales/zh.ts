@@ -2019,7 +2019,9 @@ export default {
         selectStatus: '选择状态',
         rpmLimit: '每分钟请求数 (RPM)',
         rpmLimitPlaceholder: '0 表示不限制',
-        rpmLimitHint: '该用户每分钟最大请求数，0 = 不限制；仅在所用分组未设置 rpm_limit 时作为兜底生效'
+        rpmLimitHint: '该用户每分钟最大请求数，0 = 不限制；仅在所用分组未设置 rpm_limit 时作为兜底生效',
+        codexContinueEnabled: '启用 Codex 连续推理续写',
+        codexContinueHint: '仅对该用户的 OpenAI OAuth /responses 流式请求生效，用于灰度测试，不影响其他用户'
       },
       adjustBalance: '调整余额',
       adjustConcurrency: '调整并发数',

@@ -354,6 +354,20 @@ func (_c *UserCreate) SetNillableRpmLimit(v *int) *UserCreate {
 	return _c
 }
 
+// SetCodexContinueEnabled sets the "codex_continue_enabled" field.
+func (_c *UserCreate) SetCodexContinueEnabled(v bool) *UserCreate {
+	_c.mutation.SetCodexContinueEnabled(v)
+	return _c
+}
+
+// SetNillableCodexContinueEnabled sets the "codex_continue_enabled" field if the given value is not nil.
+func (_c *UserCreate) SetNillableCodexContinueEnabled(v *bool) *UserCreate {
+	if v != nil {
+		_c.SetCodexContinueEnabled(*v)
+	}
+	return _c
+}
+
 // AddAPIKeyIDs adds the "api_keys" edge to the APIKey entity by IDs.
 func (_c *UserCreate) AddAPIKeyIDs(ids ...int64) *UserCreate {
 	_c.mutation.AddAPIKeyIDs(ids...)
@@ -656,6 +670,10 @@ func (_c *UserCreate) defaults() error {
 		v := user.DefaultRpmLimit
 		_c.mutation.SetRpmLimit(v)
 	}
+	if _, ok := _c.mutation.CodexContinueEnabled(); !ok {
+		v := user.DefaultCodexContinueEnabled
+		_c.mutation.SetCodexContinueEnabled(v)
+	}
 	return nil
 }
 
@@ -744,6 +762,9 @@ func (_c *UserCreate) check() error {
 	}
 	if _, ok := _c.mutation.RpmLimit(); !ok {
 		return &ValidationError{Name: "rpm_limit", err: errors.New(`ent: missing required field "User.rpm_limit"`)}
+	}
+	if _, ok := _c.mutation.CodexContinueEnabled(); !ok {
+		return &ValidationError{Name: "codex_continue_enabled", err: errors.New(`ent: missing required field "User.codex_continue_enabled"`)}
 	}
 	return nil
 }
@@ -867,6 +888,10 @@ func (_c *UserCreate) createSpec() (*User, *sqlgraph.CreateSpec) {
 	if value, ok := _c.mutation.RpmLimit(); ok {
 		_spec.SetField(user.FieldRpmLimit, field.TypeInt, value)
 		_node.RpmLimit = value
+	}
+	if value, ok := _c.mutation.CodexContinueEnabled(); ok {
+		_spec.SetField(user.FieldCodexContinueEnabled, field.TypeBool, value)
+		_node.CodexContinueEnabled = value
 	}
 	if nodes := _c.mutation.APIKeysIDs(); len(nodes) > 0 {
 		edge := &sqlgraph.EdgeSpec{
@@ -1480,6 +1505,18 @@ func (u *UserUpsert) AddRpmLimit(v int) *UserUpsert {
 	return u
 }
 
+// SetCodexContinueEnabled sets the "codex_continue_enabled" field.
+func (u *UserUpsert) SetCodexContinueEnabled(v bool) *UserUpsert {
+	u.Set(user.FieldCodexContinueEnabled, v)
+	return u
+}
+
+// UpdateCodexContinueEnabled sets the "codex_continue_enabled" field to the value that was provided on create.
+func (u *UserUpsert) UpdateCodexContinueEnabled() *UserUpsert {
+	u.SetExcluded(user.FieldCodexContinueEnabled)
+	return u
+}
+
 // UpdateNewValues updates the mutable fields using the new values that were set on create.
 // Using this option is equivalent to using:
 //
@@ -1928,6 +1965,20 @@ func (u *UserUpsertOne) AddRpmLimit(v int) *UserUpsertOne {
 func (u *UserUpsertOne) UpdateRpmLimit() *UserUpsertOne {
 	return u.Update(func(s *UserUpsert) {
 		s.UpdateRpmLimit()
+	})
+}
+
+// SetCodexContinueEnabled sets the "codex_continue_enabled" field.
+func (u *UserUpsertOne) SetCodexContinueEnabled(v bool) *UserUpsertOne {
+	return u.Update(func(s *UserUpsert) {
+		s.SetCodexContinueEnabled(v)
+	})
+}
+
+// UpdateCodexContinueEnabled sets the "codex_continue_enabled" field to the value that was provided on create.
+func (u *UserUpsertOne) UpdateCodexContinueEnabled() *UserUpsertOne {
+	return u.Update(func(s *UserUpsert) {
+		s.UpdateCodexContinueEnabled()
 	})
 }
 
@@ -2545,6 +2596,20 @@ func (u *UserUpsertBulk) AddRpmLimit(v int) *UserUpsertBulk {
 func (u *UserUpsertBulk) UpdateRpmLimit() *UserUpsertBulk {
 	return u.Update(func(s *UserUpsert) {
 		s.UpdateRpmLimit()
+	})
+}
+
+// SetCodexContinueEnabled sets the "codex_continue_enabled" field.
+func (u *UserUpsertBulk) SetCodexContinueEnabled(v bool) *UserUpsertBulk {
+	return u.Update(func(s *UserUpsert) {
+		s.SetCodexContinueEnabled(v)
+	})
+}
+
+// UpdateCodexContinueEnabled sets the "codex_continue_enabled" field to the value that was provided on create.
+func (u *UserUpsertBulk) UpdateCodexContinueEnabled() *UserUpsertBulk {
+	return u.Update(func(s *UserUpsert) {
+		s.UpdateCodexContinueEnabled()
 	})
 }
 

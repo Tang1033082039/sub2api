@@ -115,6 +115,9 @@ func (User) Fields() []ent.Field {
 		// 用户级每分钟请求数上限（0 = 不限制）。仅当所在分组未设置 rpm_limit 时作为兜底生效。
 		field.Int("rpm_limit").
 			Default(0),
+		field.Bool("codex_continue_enabled").
+			Default(false).
+			Comment("是否为该用户启用 Codex 连续推理续写灰度功能"),
 	}
 }
 
