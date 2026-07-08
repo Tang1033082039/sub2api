@@ -41,8 +41,9 @@ type AccountRuntimeBlocker interface {
 
 // SuccessfulTestRecoveryResult 表示测试成功后恢复了哪些运行时状态。
 type SuccessfulTestRecoveryResult struct {
-	ClearedError     bool
-	ClearedRateLimit bool
+	ClearedError        bool
+	ClearedRateLimit    bool
+	RestoredSchedulable bool
 }
 
 // AccountRecoveryOptions 控制账号恢复时的附加行为。
@@ -1826,7 +1827,13 @@ func (s *RateLimitService) RecoverAccountState(ctx context.Context, accountID in
 		}
 		result.ClearedRateLimit = true
 	}
-	if result.ClearedError || result.ClearedRateLimit {
+	if shouldRestoreSchedulableAfterRecovery(account, result) {
+		if err := s.accountRepo.SetSchedulable(ctx, accountID, true); err != nil {
+			return nil, err
+		}
+		result.RestoredSchedulable = true
+	}
+	if result.ClearedError || result.ClearedRateLimit || result.RestoredSchedulable {
 		s.ResetOpenAI403Counter(ctx, accountID)
 		if result.ClearedError && !result.ClearedRateLimit {
 			s.notifyAccountSchedulingBlockCleared(accountID)
@@ -1840,6 +1847,31 @@ func (s *RateLimitService) RecoverAccountState(ctx context.Context, accountID in
 // 按需恢复 error / rate-limit / overload / temp-unsched / model-rate-limit 等运行时状态。
 func (s *RateLimitService) RecoverAccountAfterSuccessfulTest(ctx context.Context, accountID int64) (*SuccessfulTestRecoveryResult, error) {
 	return s.RecoverAccountState(ctx, accountID, AccountRecoveryOptions{})
+}
+
+func shouldRestoreSchedulableAfterRecovery(account *Account, result *SuccessfulTestRecoveryResult) bool {
+	if account == nil || result == nil || account.Schedulable {
+		return false
+	}
+	if account.Status == StatusDisabled {
+		return false
+	}
+	if result.ClearedError || result.ClearedRateLimit {
+		return true
+	}
+	return account.Status == StatusActive && hasRecoverableCleanupState(account)
+}
+
+func hasRecoverableCleanupState(account *Account) bool {
+	if account == nil || len(account.Extra) == 0 {
+		return false
+	}
+	status := strings.ToLower(strings.TrimSpace(fmt.Sprint(account.Extra["cleanup_status"])))
+	if status == "" || status == "none" || status == "resolved" || status == "done" {
+		return false
+	}
+	reason := strings.ToLower(strings.TrimSpace(fmt.Sprint(account.Extra["cleanup_reason"])))
+	return status == "pending" && (strings.Contains(reason, "quota") || strings.Contains(reason, "403"))
 }
 
 func (s *RateLimitService) ClearTempUnschedulable(ctx context.Context, accountID int64) error {
