@@ -43,6 +43,7 @@ export async function list(
     cleanup_status?: string
     integration_source?: string
     lite?: string
+    include_scheduler_score?: string
     sort_by?: string
     sort_order?: 'asc' | 'desc'
   },
@@ -80,6 +81,7 @@ export async function listWithEtag(
     cleanup_status?: string
     integration_source?: string
     lite?: string
+    include_scheduler_score?: string
     sort_by?: string
     sort_order?: 'asc' | 'desc'
   },
