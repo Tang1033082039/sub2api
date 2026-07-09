@@ -57,7 +57,7 @@ type AdminService interface {
 	ReplaceUserGroup(ctx context.Context, userID, oldGroupID, newGroupID int64) (*ReplaceUserGroupResult, error)
 
 	// Account management
-	ListAccounts(ctx context.Context, page, pageSize int, platform, accountType, status, search string, groupID int64, privacyMode string, sortBy, sortOrder string) ([]Account, int64, error)
+	ListAccounts(ctx context.Context, page, pageSize int, filters AccountListFilters, sortBy, sortOrder string) ([]Account, int64, error)
 	// ListAccountsForSchedulerScoreFilter 返回符合过滤条件的全部账号（不分页），
 	// 作为账号列表页计算 OpenAI 调度分数的过滤范围池。
 	ListAccountsForSchedulerScoreFilter(ctx context.Context, platform, accountType, status, search string, groupID int64, privacyMode string) ([]Account, error)
@@ -85,6 +85,7 @@ type AdminService interface {
 	ForceAntigravityPrivacy(ctx context.Context, account *Account) string
 	SetAccountSchedulable(ctx context.Context, id int64, schedulable bool) (*Account, error)
 	BulkUpdateAccounts(ctx context.Context, input *BulkUpdateAccountsInput) (*BulkUpdateAccountsResult, error)
+	BulkDeleteAccounts(ctx context.Context, input *BulkDeleteAccountsInput) (*BulkDeleteAccountsResult, error)
 	CheckMixedChannelRisk(ctx context.Context, currentAccountID int64, currentAccountPlatform string, groupIDs []int64) error
 	// RevertAccountProxyFallback 将账号的 proxy_id 切回 proxy_fallback_origin_id，并清空 origin 字段。
 	// 若账号不存在返回 ErrAccountNotFound；若账号存在但不在 fallback 状态，返回 ErrAccountNotInFallback。
@@ -353,12 +354,14 @@ type BulkUpdateAccountsInput struct {
 }
 
 type BulkUpdateAccountFilters struct {
-	Platform    string
-	Type        string
-	Status      string
-	Group       string
-	Search      string
-	PrivacyMode string
+	Platform          string
+	Type              string
+	Status            string
+	Group             string
+	Search            string
+	PrivacyMode       string
+	CleanupStatus     string
+	IntegrationSource string
 }
 
 // BulkUpdateAccountResult captures the result for a single account update.
@@ -405,6 +408,15 @@ type BulkUpdateAccountsResult struct {
 	FailedIDs  []int64                   `json:"failed_ids"`
 	Results    []BulkUpdateAccountResult `json:"results"`
 }
+
+// BulkDeleteAccountsInput describes the payload for bulk deleting accounts.
+type BulkDeleteAccountsInput struct {
+	AccountIDs []int64
+	Filters    *BulkUpdateAccountFilters
+}
+
+// BulkDeleteAccountsResult is the aggregated response for bulk deletions.
+type BulkDeleteAccountsResult = BulkUpdateAccountsResult
 
 type CreateProxyInput struct {
 	Name           string

@@ -16,16 +16,8 @@ import (
 )
 
 // Account management implementations
-func (s *adminServiceImpl) ListAccounts(ctx context.Context, page, pageSize int, platform, accountType, status, search string, groupID int64, privacyMode string, sortBy, sortOrder string) ([]Account, int64, error) {
+func (s *adminServiceImpl) ListAccounts(ctx context.Context, page, pageSize int, filters AccountListFilters, sortBy, sortOrder string) ([]Account, int64, error) {
 	params := pagination.PaginationParams{Page: page, PageSize: pageSize, SortBy: sortBy, SortOrder: sortOrder}
-	filters := AccountListFilters{
-		Platform:    platform,
-		Type:        accountType,
-		Status:      status,
-		Search:      search,
-		GroupID:     groupID,
-		PrivacyMode: privacyMode,
-	}
 	accounts, result, err := s.accountRepo.ListWithFilters(ctx, params, filters)
 	if err != nil {
 		return nil, 0, err
@@ -377,6 +369,10 @@ func (s *adminServiceImpl) UpdateAccountExtra(ctx context.Context, id int64, upd
 // BulkUpdateAccounts updates multiple accounts in one request.
 // It merges credentials/extra keys instead of overwriting the whole object.
 func (s *adminServiceImpl) BulkUpdateAccounts(ctx context.Context, input *BulkUpdateAccountsInput) (*BulkUpdateAccountsResult, error) {
+	if input == nil {
+		return nil, ErrAccountNilInput
+	}
+
 	if len(input.AccountIDs) == 0 && input.Filters != nil {
 		accountIDs, err := s.resolveBulkUpdateTargetIDs(ctx, input.Filters)
 		if err != nil {
@@ -547,6 +543,61 @@ func (s *adminServiceImpl) BulkUpdateAccounts(ctx context.Context, input *BulkUp
 	return result, nil
 }
 
+// BulkDeleteAccounts deletes multiple accounts while preserving the single-delete cascade rules.
+func (s *adminServiceImpl) BulkDeleteAccounts(ctx context.Context, input *BulkDeleteAccountsInput) (*BulkDeleteAccountsResult, error) {
+	if input == nil {
+		return nil, ErrAccountNilInput
+	}
+	if len(input.AccountIDs) == 0 && input.Filters != nil {
+		accountIDs, err := s.resolveBulkUpdateTargetIDs(ctx, input.Filters)
+		if err != nil {
+			return nil, err
+		}
+		input.AccountIDs = accountIDs
+	}
+
+	accountIDs := dedupeAccountIDs(input.AccountIDs)
+	result := &BulkDeleteAccountsResult{
+		SuccessIDs: make([]int64, 0, len(accountIDs)),
+		FailedIDs:  make([]int64, 0, len(accountIDs)),
+		Results:    make([]BulkUpdateAccountResult, 0, len(accountIDs)),
+	}
+	if len(accountIDs) == 0 {
+		return result, nil
+	}
+
+	for _, accountID := range accountIDs {
+		entry := BulkUpdateAccountResult{AccountID: accountID}
+		if err := s.DeleteAccount(ctx, accountID); err != nil {
+			entry.Error = err.Error()
+			result.Failed++
+			result.FailedIDs = append(result.FailedIDs, accountID)
+		} else {
+			entry.Success = true
+			result.Success++
+			result.SuccessIDs = append(result.SuccessIDs, accountID)
+		}
+		result.Results = append(result.Results, entry)
+	}
+	return result, nil
+}
+
+func dedupeAccountIDs(ids []int64) []int64 {
+	seen := make(map[int64]struct{}, len(ids))
+	deduped := make([]int64, 0, len(ids))
+	for _, id := range ids {
+		if id <= 0 {
+			continue
+		}
+		if _, ok := seen[id]; ok {
+			continue
+		}
+		seen[id] = struct{}{}
+		deduped = append(deduped, id)
+	}
+	return deduped
+}
+
 func (s *adminServiceImpl) resolveBulkUpdateTargetIDs(ctx context.Context, filters *BulkUpdateAccountFilters) ([]int64, error) {
 	if filters == nil {
 		return nil, nil
@@ -574,12 +625,16 @@ func (s *adminServiceImpl) resolveBulkUpdateTargetIDs(ctx context.Context, filte
 			ctx,
 			page,
 			pageSize,
-			filters.Platform,
-			filters.Type,
-			filters.Status,
-			filters.Search,
-			groupID,
-			filters.PrivacyMode,
+			AccountListFilters{
+				Platform:          filters.Platform,
+				Type:              filters.Type,
+				Status:            filters.Status,
+				Search:            filters.Search,
+				GroupID:           groupID,
+				PrivacyMode:       filters.PrivacyMode,
+				CleanupStatus:     filters.CleanupStatus,
+				IntegrationSource: filters.IntegrationSource,
+			},
 			"",
 			"",
 		)
