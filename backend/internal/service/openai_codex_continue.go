@@ -409,7 +409,7 @@ func (s *OpenAIGatewayService) readCodexContinueRound(
 			}
 			round.rawUsage = extractCodexContinueRawUsage(ev)
 			if eventType == "response.failed" {
-				if sanitized, changed := sanitizeOpenAIResponseFailedEventForClient(dataBytes, eventType); changed {
+				if sanitized, changed := sanitizeOpenAIResponseFailedEventForClient(dataBytes, eventType, false); changed {
 					_ = json.Unmarshal(sanitized, &round.terminal)
 				}
 			}
