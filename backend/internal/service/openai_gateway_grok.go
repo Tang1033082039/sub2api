@@ -344,7 +344,7 @@ func (s *OpenAIGatewayService) bridgeGrokComposerImageInputs(
 			return body, bridgeUsage, false, err
 		}
 		descriptions = append(descriptions, description)
-		addOpenAIUsage(&bridgeUsage, usage)
+		addOpenAIUsage(&bridgeUsage, &usage)
 	}
 
 	if !rewriteGrokComposerImagesAsText(reqBody, descriptions) {
@@ -598,18 +598,6 @@ func grokComposerTextFromPart(part any) string {
 	default:
 		return ""
 	}
-}
-
-func addOpenAIUsage(dst *OpenAIUsage, usage OpenAIUsage) {
-	if dst == nil {
-		return
-	}
-	dst.InputTokens += usage.InputTokens
-	dst.ImageInputTokens += usage.ImageInputTokens
-	dst.OutputTokens += usage.OutputTokens
-	dst.CacheCreationInputTokens += usage.CacheCreationInputTokens
-	dst.CacheReadInputTokens += usage.CacheReadInputTokens
-	dst.ImageOutputTokens += usage.ImageOutputTokens
 }
 
 func buildGrokResponsesRequest(ctx context.Context, c *gin.Context, account *Account, body []byte, token string) (*http.Request, error) {

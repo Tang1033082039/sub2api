@@ -125,7 +125,7 @@ func (s *OpenAIGatewayService) forwardAsRawChatCompletions(
 		}
 		if bridged {
 			upstreamBody = bridgedBody
-			addOpenAIUsage(&bridgeUsage, usage)
+			addOpenAIUsage(&bridgeUsage, &usage)
 		}
 	}
 
@@ -203,7 +203,7 @@ func (s *OpenAIGatewayService) forwardAsRawChatCompletions(
 		result, forwardErr = s.bufferRawChatCompletions(c, resp, originalModel, billingModel, upstreamModel, reasoningEffort, serviceTier, startTime)
 	}
 	if result != nil {
-		addOpenAIUsage(&result.Usage, bridgeUsage)
+		addOpenAIUsage(&result.Usage, &bridgeUsage)
 	}
 	return result, forwardErr
 }
