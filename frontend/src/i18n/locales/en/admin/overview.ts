@@ -11,6 +11,7 @@ export default {
       todayTokens: 'Today Tokens',
       totalTokens: 'Total Tokens',
       cacheToday: 'Cache (Today)',
+      cacheRate: 'Cache Hit Rate',
       performance: 'Performance',
       avgResponse: 'Avg Response',
       active: 'active',
@@ -436,7 +437,9 @@ export default {
         roleLabel: 'Role',
         rpmLimit: 'Requests Per Minute (RPM)',
         rpmLimitPlaceholder: '0 = unlimited',
-        rpmLimitHint: 'Max requests per minute for this user; 0 = unlimited. Acts as a fallback only when the group has no rpm_limit set.'
+        rpmLimitHint: 'Max requests per minute for this user; 0 = unlimited. Acts as a fallback only when the group has no rpm_limit set.',
+        codexContinueEnabled: 'Enable Codex continuation',
+        codexContinueHint: 'Allow this user to use the Codex continuation feature'
       },
       columns: {
         user: 'User',
