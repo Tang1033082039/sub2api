@@ -84,6 +84,24 @@ func TestSetStickySessionAccountID_DualWriteOldDisabled(t *testing.T) {
 	require.False(t, exists)
 }
 
+func TestStickySessionAccountID_IsScopedByRequestedModel(t *testing.T) {
+	cache := &stubGatewayCache{sessionBindings: map[string]int64{}}
+	svc := &OpenAIGatewayService{cache: cache}
+
+	ctxB := withOpenAIStickyModel(context.Background(), "model-b")
+	ctxD := withOpenAIStickyModel(context.Background(), "model-d")
+	require.NoError(t, svc.setStickySessionAccountID(ctxB, nil, "shared-session", 1, openaiStickySessionTTL))
+	require.NoError(t, svc.setStickySessionAccountID(ctxD, nil, "shared-session", 2, openaiStickySessionTTL))
+
+	accountB, err := svc.getStickySessionAccountID(ctxB, nil, "shared-session")
+	require.NoError(t, err)
+	require.Equal(t, int64(1), accountB)
+
+	accountD, err := svc.getStickySessionAccountID(ctxD, nil, "shared-session")
+	require.NoError(t, err)
+	require.Equal(t, int64(2), accountD)
+}
+
 func TestSnapshotOpenAICompatibilityFallbackMetrics(t *testing.T) {
 	before := SnapshotOpenAICompatibilityFallbackMetrics()
 

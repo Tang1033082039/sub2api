@@ -1717,6 +1717,7 @@ func (s *OpenAIGatewayService) selectAccountWithScheduler(
 	previousResponseCanMove bool,
 ) (*AccountSelectionResult, OpenAIAccountScheduleDecision, error) {
 	ctx = s.withOpenAIQuotaAutoPauseContext(ctx)
+	ctx = withOpenAIStickyModel(ctx, requestedModel)
 	platform = normalizeOpenAICompatiblePlatform(platform)
 	decision := OpenAIAccountScheduleDecision{
 		CacheSensitive: strings.TrimSpace(sessionHash) != "" || strings.TrimSpace(previousResponseID) != "",

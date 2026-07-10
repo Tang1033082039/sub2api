@@ -609,6 +609,46 @@ func TestOpenAISelectAccountForModelWithExclusions_StickyUnschedulableClearsSess
 	}
 }
 
+func TestOpenAISelectAccountForModelWithExclusions_StickySessionIsScopedByModel(t *testing.T) {
+	const sessionHash = "shared-model-session"
+	repo := stubOpenAIAccountRepo{
+		accounts: []Account{
+			{
+				ID:          1,
+				Platform:    PlatformOpenAI,
+				Status:      StatusActive,
+				Schedulable: true,
+				Concurrency: 1,
+				Credentials: map[string]any{"model_mapping": map[string]any{"model-b": "model-b"}},
+			},
+			{
+				ID:          2,
+				Platform:    PlatformOpenAI,
+				Status:      StatusActive,
+				Schedulable: true,
+				Concurrency: 1,
+				Credentials: map[string]any{"model_mapping": map[string]any{"model-d": "model-d"}},
+			},
+		},
+	}
+	svc := &OpenAIGatewayService{
+		accountRepo: repo,
+		cache:       &stubGatewayCache{sessionBindings: map[string]int64{}},
+	}
+
+	account, err := svc.SelectAccountForModelWithExclusions(context.Background(), nil, sessionHash, "model-b", nil)
+	require.NoError(t, err)
+	require.Equal(t, int64(1), account.ID)
+
+	account, err = svc.SelectAccountForModelWithExclusions(context.Background(), nil, sessionHash, "model-d", nil)
+	require.NoError(t, err)
+	require.Equal(t, int64(2), account.ID)
+
+	account, err = svc.SelectAccountForModelWithExclusions(context.Background(), nil, sessionHash, "model-b", nil)
+	require.NoError(t, err)
+	require.Equal(t, int64(1), account.ID)
+}
+
 func TestOpenAISelectAccountForModelWithExclusions_StickyOutsideGroupClearsSession(t *testing.T) {
 	sessionHash := "session-outside-group"
 	groupID := int64(1001)

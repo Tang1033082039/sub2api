@@ -17,6 +17,10 @@ type openAILegacySessionHashContextKey struct{}
 
 var openAILegacySessionHashKey = openAILegacySessionHashContextKey{}
 
+type openAIStickyModelContextKey struct{}
+
+var openAIStickyModelKey = openAIStickyModelContextKey{}
+
 var (
 	openAIStickyLegacyReadFallbackTotal atomic.Int64
 	openAIStickyLegacyReadFallbackHit   atomic.Int64
@@ -67,6 +71,25 @@ func openAILegacySessionHashFromContext(ctx context.Context) string {
 	return strings.TrimSpace(value)
 }
 
+// withOpenAIStickyModel scopes account affinity to the requested model. Prompt
+// cache state is model-specific, so accounts selected for one model must not
+// pin a later request for an unsupported model to the same upstream account.
+func withOpenAIStickyModel(ctx context.Context, requestedModel string) context.Context {
+	model := strings.TrimSpace(requestedModel)
+	if ctx == nil || model == "" {
+		return ctx
+	}
+	return context.WithValue(ctx, openAIStickyModelKey, model)
+}
+
+func openAIStickyModelFromContext(ctx context.Context) string {
+	if ctx == nil {
+		return ""
+	}
+	model, _ := ctx.Value(openAIStickyModelKey).(string)
+	return strings.TrimSpace(model)
+}
+
 func attachOpenAILegacySessionHashToGin(c *gin.Context, legacyHash string) {
 	if c == nil || c.Request == nil {
 		return
@@ -88,7 +111,23 @@ func (s *OpenAIGatewayService) openAISessionHashDualWriteOldEnabled() bool {
 	return s.cfg.Gateway.OpenAIWS.SessionHashDualWriteOld
 }
 
-func (s *OpenAIGatewayService) openAISessionCacheKey(sessionHash string) string {
+func (s *OpenAIGatewayService) openAISessionCacheKey(ctx context.Context, sessionHash string) string {
+	return openAIStickySessionCacheKey(sessionHash, openAIStickyModelFromContext(ctx))
+}
+
+func openAIStickySessionCacheKey(sessionHash string, model string) string {
+	normalized := strings.TrimSpace(sessionHash)
+	if normalized == "" {
+		return ""
+	}
+	key := "openai:" + normalized
+	if model = strings.TrimSpace(model); model != "" {
+		key += ":model:" + fmt.Sprintf("%016x", xxhash.Sum64String(model))
+	}
+	return key
+}
+
+func (s *OpenAIGatewayService) openAIUnscopedSessionCacheKey(sessionHash string) string {
 	normalized := strings.TrimSpace(sessionHash)
 	if normalized == "" {
 		return ""
@@ -101,8 +140,8 @@ func (s *OpenAIGatewayService) openAILegacySessionCacheKey(ctx context.Context, 
 	if legacyHash == "" {
 		return ""
 	}
-	legacyKey := "openai:" + legacyHash
-	if legacyKey == s.openAISessionCacheKey(sessionHash) {
+	legacyKey := openAIStickySessionCacheKey(legacyHash, openAIStickyModelFromContext(ctx))
+	if legacyKey == s.openAISessionCacheKey(ctx, sessionHash) {
 		return ""
 	}
 	return legacyKey
@@ -124,7 +163,7 @@ func (s *OpenAIGatewayService) getStickySessionAccountID(ctx context.Context, gr
 		return 0, nil
 	}
 
-	primaryKey := s.openAISessionCacheKey(sessionHash)
+	primaryKey := s.openAISessionCacheKey(ctx, sessionHash)
 	if primaryKey == "" {
 		return 0, nil
 	}
@@ -135,6 +174,12 @@ func (s *OpenAIGatewayService) getStickySessionAccountID(ctx context.Context, gr
 	}
 	if !s.openAISessionHashReadOldFallbackEnabled() {
 		return accountID, err
+	}
+	if unscopedKey := s.openAIUnscopedSessionCacheKey(sessionHash); unscopedKey != "" && unscopedKey != primaryKey {
+		unscopedAccountID, unscopedErr := s.cache.GetSessionAccountID(ctx, derefGroupID(groupID), unscopedKey)
+		if unscopedErr == nil && unscopedAccountID > 0 {
+			return unscopedAccountID, nil
+		}
 	}
 
 	legacyKey := s.openAILegacySessionCacheKey(ctx, sessionHash)
@@ -148,6 +193,16 @@ func (s *OpenAIGatewayService) getStickySessionAccountID(ctx context.Context, gr
 		openAIStickyLegacyReadFallbackHit.Add(1)
 		return legacyAccountID, nil
 	}
+	if legacyHash := openAILegacySessionHashFromContext(ctx); legacyHash != "" {
+		legacyUnscopedKey := s.openAIUnscopedSessionCacheKey(legacyHash)
+		if legacyUnscopedKey != "" && legacyUnscopedKey != legacyKey {
+			legacyAccountID, legacyErr = s.cache.GetSessionAccountID(ctx, derefGroupID(groupID), legacyUnscopedKey)
+			if legacyErr == nil && legacyAccountID > 0 {
+				openAIStickyLegacyReadFallbackHit.Add(1)
+				return legacyAccountID, nil
+			}
+		}
+	}
 	return accountID, err
 }
 
@@ -155,7 +210,7 @@ func (s *OpenAIGatewayService) setStickySessionAccountID(ctx context.Context, gr
 	if s == nil || s.cache == nil || accountID <= 0 {
 		return nil
 	}
-	primaryKey := s.openAISessionCacheKey(sessionHash)
+	primaryKey := s.openAISessionCacheKey(ctx, sessionHash)
 	if primaryKey == "" {
 		return nil
 	}
@@ -167,12 +222,25 @@ func (s *OpenAIGatewayService) setStickySessionAccountID(ctx context.Context, gr
 	if !s.openAISessionHashDualWriteOldEnabled() {
 		return nil
 	}
+	if unscopedKey := s.openAIUnscopedSessionCacheKey(sessionHash); unscopedKey != "" && unscopedKey != primaryKey {
+		if err := s.cache.SetSessionAccountID(ctx, derefGroupID(groupID), unscopedKey, accountID, s.openAIStickyLegacyTTL(ttl)); err != nil {
+			return err
+		}
+	}
 	legacyKey := s.openAILegacySessionCacheKey(ctx, sessionHash)
 	if legacyKey == "" {
 		return nil
 	}
 	if err := s.cache.SetSessionAccountID(ctx, derefGroupID(groupID), legacyKey, accountID, s.openAIStickyLegacyTTL(ttl)); err != nil {
 		return err
+	}
+	if legacyHash := openAILegacySessionHashFromContext(ctx); legacyHash != "" {
+		legacyUnscopedKey := s.openAIUnscopedSessionCacheKey(legacyHash)
+		if legacyUnscopedKey != "" && legacyUnscopedKey != legacyKey {
+			if err := s.cache.SetSessionAccountID(ctx, derefGroupID(groupID), legacyUnscopedKey, accountID, s.openAIStickyLegacyTTL(ttl)); err != nil {
+				return err
+			}
+		}
 	}
 	openAIStickyLegacyDualWriteTotal.Add(1)
 	return nil
@@ -182,7 +250,7 @@ func (s *OpenAIGatewayService) refreshStickySessionTTL(ctx context.Context, grou
 	if s == nil || s.cache == nil {
 		return nil
 	}
-	primaryKey := s.openAISessionCacheKey(sessionHash)
+	primaryKey := s.openAISessionCacheKey(ctx, sessionHash)
 	if primaryKey == "" {
 		return nil
 	}
@@ -196,6 +264,9 @@ func (s *OpenAIGatewayService) refreshStickySessionTTL(ctx context.Context, grou
 	if legacyKey != "" {
 		_ = s.cache.RefreshSessionTTL(ctx, derefGroupID(groupID), legacyKey, s.openAIStickyLegacyTTL(ttl))
 	}
+	if unscopedKey := s.openAIUnscopedSessionCacheKey(sessionHash); unscopedKey != "" && unscopedKey != primaryKey {
+		_ = s.cache.RefreshSessionTTL(ctx, derefGroupID(groupID), unscopedKey, s.openAIStickyLegacyTTL(ttl))
+	}
 	return err
 }
 
@@ -203,7 +274,7 @@ func (s *OpenAIGatewayService) deleteStickySessionAccountID(ctx context.Context,
 	if s == nil || s.cache == nil {
 		return nil
 	}
-	primaryKey := s.openAISessionCacheKey(sessionHash)
+	primaryKey := s.openAISessionCacheKey(ctx, sessionHash)
 	if primaryKey == "" {
 		return nil
 	}
@@ -216,6 +287,9 @@ func (s *OpenAIGatewayService) deleteStickySessionAccountID(ctx context.Context,
 	legacyKey := s.openAILegacySessionCacheKey(ctx, sessionHash)
 	if legacyKey != "" {
 		_ = s.cache.DeleteSessionAccountID(ctx, derefGroupID(groupID), legacyKey)
+	}
+	if unscopedKey := s.openAIUnscopedSessionCacheKey(sessionHash); unscopedKey != "" && unscopedKey != primaryKey {
+		_ = s.cache.DeleteSessionAccountID(ctx, derefGroupID(groupID), unscopedKey)
 	}
 	return err
 }
