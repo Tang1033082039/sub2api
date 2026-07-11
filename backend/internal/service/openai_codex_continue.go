@@ -74,7 +74,7 @@ type codexContinueUsageSum struct {
 }
 
 func shouldUseCodexContinueFold(c *gin.Context, account *Account, reqStream bool, isCodexCLI bool) bool {
-	if !reqStream || !isCodexCLI || account == nil || account.Platform != PlatformOpenAI || account.Type != AccountTypeOAuth {
+	if !reqStream || !isCodexCLI || account == nil || account.Platform != PlatformOpenAI || (account.Type != AccountTypeOAuth && account.Type != AccountTypeAPIKey) {
 		return false
 	}
 	if c == nil || isOpenAIResponsesCompactPath(c) {
