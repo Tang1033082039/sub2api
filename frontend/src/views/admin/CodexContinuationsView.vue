@@ -37,7 +37,7 @@
   <div v-if="selected" class="fixed inset-0 z-50 grid place-items-center bg-black/40 p-4" @click.self="selected = null">
     <section class="w-full max-w-lg rounded-lg bg-white p-6 shadow-xl dark:bg-dark-800">
       <div class="flex items-start justify-between gap-4"><div><h2 class="text-lg font-semibold text-gray-900 dark:text-white">续写明细</h2><p class="mt-1 break-all font-mono text-xs text-gray-500">{{ selected.request_id }}</p></div><button type="button" class="btn btn-ghost px-2" title="关闭" @click="selected = null"><Icon name="x" size="sm" /></button></div>
-      <ol class="mt-5 space-y-3"><li v-for="round in selected.rounds" :key="round.round" class="flex items-center justify-between border-b border-gray-100 pb-3 text-sm last:border-0 dark:border-dark-700"><span>第 {{ round.round }} 轮</span><span class="font-mono text-gray-600 dark:text-gray-300">{{ round.reasoning_tokens }} tokens</span><span class="text-gray-500">层级 {{ round.tier || '-' }}</span></li><li v-if="selected.rounds.length === 0" class="text-sm text-gray-500">未获得轮次数据</li></ol>
+      <ol class="mt-5 space-y-3"><li v-for="round in selected.rounds" :key="round.round" class="flex items-center justify-between border-b border-gray-100 pb-3 text-sm last:border-0 dark:border-dark-700"><span>第 {{ round.round }} 轮<span v-if="round.kind" class="ml-2 text-xs text-gray-400">({{ roundKindText(round.kind) }})</span><span v-if="round.winner" class="ml-2 rounded bg-amber-100 px-1.5 py-0.5 text-xs text-amber-800 dark:bg-amber-900/40 dark:text-amber-300">采用</span></span><span class="font-mono text-gray-600 dark:text-gray-300">{{ round.reasoning_tokens }} tokens</span><span class="text-gray-500">层级 {{ round.tier || '-' }}</span></li><li v-if="selected.rounds.length === 0" class="text-sm text-gray-500">未获得轮次数据</li></ol>
     </section>
   </div>
 </template>
@@ -87,6 +87,7 @@ function search() { page.value = 1; void load() }
 function goPage(value: number) { page.value = value; void load() }
 function updatePageSize(value: number) { pageSize.value = value; page.value = 1; void load() }
 function statusText(value: CodexContinuationLog['status']) { return ({ continued: '续写成功', not_needed: '无需续写', failed: '续写失败' })[value] }
+function roundKindText(value: NonNullable<CodexContinuationLog['rounds'][number]['kind']>) { return ({ truncation_continue: '截断续写', low_reasoning_retry: '低推理重试' })[value] }
 function statusClass(value: CodexContinuationLog['status']) { return ['inline-flex rounded-md px-2 py-1 text-xs font-medium', value === 'continued' ? 'bg-green-100 text-green-800 dark:bg-green-900/40 dark:text-green-300' : value === 'not_needed' ? 'bg-sky-100 text-sky-800 dark:bg-sky-900/40 dark:text-sky-300' : 'bg-red-100 text-red-800 dark:bg-red-900/40 dark:text-red-300'] }
 function formatTime(value: string) { return value ? new Date(value).toLocaleString() : '-' }
 

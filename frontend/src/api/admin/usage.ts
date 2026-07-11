@@ -96,6 +96,8 @@ export interface CodexContinueRound {
   round: number
   reasoning_tokens: number
   tier: number
+  kind?: 'truncation_continue' | 'low_reasoning_retry'
+  winner?: boolean
 }
 
 export interface CodexContinuationLog {

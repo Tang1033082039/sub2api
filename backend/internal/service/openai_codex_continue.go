@@ -23,9 +23,14 @@ const (
 	codexContinueTruncationStep = 518
 	codexContinueMaxContinue    = 3
 	codexContinueMinN           = 1
-	codexContinueFirstRoundMin  = codexContinueTruncationStep - 2
-	codexContinueMarkerText     = "Continue thinking..."
-	openAISSEDone               = "[DONE]"
+	// codexContinueFirstRoundMin 是"首轮低推理重试"区间的上限（不含）；达到或超过
+	// 该值时按精确截断指纹（518n-2）逻辑处理，不再走重试。
+	codexContinueFirstRoundMin = codexContinueTruncationStep - 2
+	// codexContinueLowReasoningFloor 是"首轮低推理重试"区间的下限（含）；低于该值
+	// 视为真正无需推理即可正确回答的简单问题，不触发重试。
+	codexContinueLowReasoningFloor = 200
+	codexContinueMarkerText        = "Continue thinking..."
+	openAISSEDone                  = "[DONE]"
 )
 
 type codexContinueFoldResult struct {
@@ -44,9 +49,11 @@ type CodexContinueTrace struct {
 }
 
 type CodexContinueTraceRound struct {
-	Round           int `json:"round"`
-	ReasoningTokens int `json:"reasoning_tokens"`
-	Tier            int `json:"tier"`
+	Round           int    `json:"round"`
+	ReasoningTokens int    `json:"reasoning_tokens"`
+	Tier            int    `json:"tier"`
+	Kind            string `json:"kind,omitempty"`
+	Winner          bool   `json:"winner,omitempty"`
 }
 
 type codexContinueRound struct {
@@ -223,6 +230,7 @@ func (s *OpenAIGatewayService) foldCodexContinueStream(
 	totalUsage := &OpenAIUsage{}
 	imageCounter := newOpenAIImageOutputCounter()
 	currentResp := resp
+	var pendingLowReasoningRound *codexContinueRound
 
 	for roundNo := 1; ; roundNo++ {
 		round, readErr := s.readCodexContinueRound(ctx, currentResp, account, roundNo, seq, &downstreamOutputIndex, &baseResponse, &firstVisibleResponseID, writeEvent, imageCounter, originalModel, upstreamModel, startTime, &firstTokenMs)
@@ -244,27 +252,26 @@ func (s *OpenAIGatewayService) foldCodexContinueStream(
 			}
 			return &codexContinueFoldResult{usage: totalUsage, firstTokenMs: firstTokenMs, responseID: firstVisibleResponseID, imageCount: imageCounter.Count(), imageOutputSizes: imageCounter.Sizes(), trace: trace}, readErr
 		}
-		for _, item := range round.reasoningItems {
-			finalOutput = append(finalOutput, cloneJSONMap(item))
-		}
-
 		reasoningTokens := codexContinueReasoningTokens(round.rawUsage)
 		n := codexContinueTierN(reasoningTokens)
 		roundsInfo = append(roundsInfo, map[string]any{"round": roundNo, "reasoning_tokens": reasoningTokens, "n": n})
-		trace.Rounds = append(trace.Rounds, CodexContinueTraceRound{Round: roundNo, ReasoningTokens: reasoningTokens, Tier: n})
+		traceRound := CodexContinueTraceRound{Round: roundNo, ReasoningTokens: reasoningTokens, Tier: n}
 
 		hasEncrypted := false
 		if len(round.reasoningItems) > 0 {
 			last := round.reasoningItems[len(round.reasoningItems)-1]
 			_, hasEncrypted = last["encrypted_content"].(string)
 		}
-		doContinue := round.sawTerminal &&
-			codexContinueShouldContinueRound(roundNo, reasoningTokens) &&
-			hasEncrypted &&
-			roundNo <= codexContinueMaxContinue
+		isTruncationContinue := round.sawTerminal && codexContinueShouldContinue(reasoningTokens) && hasEncrypted && roundNo <= codexContinueMaxContinue
+		isLowReasoningRetry := round.sawTerminal && pendingLowReasoningRound == nil && codexContinueIsLowReasoningRetryCandidate(roundNo, reasoningTokens)
 
 		stopReason := ""
-		if !doContinue && codexContinueIsTruncationPattern(reasoningTokens) {
+		switch {
+		case isTruncationContinue:
+			traceRound.Kind = "truncation_continue"
+		case isLowReasoningRetry:
+			traceRound.Kind = "low_reasoning_retry"
+		case codexContinueIsTruncationPattern(reasoningTokens):
 			switch {
 			case !hasEncrypted:
 				stopReason = "no_encrypted_content"
@@ -274,8 +281,14 @@ func (s *OpenAIGatewayService) foldCodexContinueStream(
 				stopReason = "tier_out_of_window"
 			}
 		}
+		trace.Rounds = append(trace.Rounds, traceRound)
 
-		if doContinue {
+		if isTruncationContinue {
+			for _, item := range round.reasoningItems {
+				finalOutput = append(finalOutput, cloneJSONMap(item))
+			}
+			pendingLowReasoningRound = nil
+
 			for _, item := range round.reasoningItems {
 				replayTail = append(replayTail, cloneJSONMap(item))
 			}
@@ -289,39 +302,45 @@ func (s *OpenAIGatewayService) foldCodexContinueStream(
 				writeEvent(codexContinueSyntheticIncomplete(baseResponse, finalOutput, incompleteUsage, seq.Take(), "build_continuation_failed", roundsInfo, usageSum.Raw()))
 				return &codexContinueFoldResult{usage: totalUsage, firstTokenMs: firstTokenMs, responseID: firstVisibleResponseID, imageCount: imageCounter.Count(), imageOutputSizes: imageCounter.Sizes(), trace: trace}, nil
 			}
-			nextReq, buildReqErr := s.buildUpstreamRequest(ctx, c, account, nextBody, token, true, promptCacheKey, isCodexCLI)
-			if buildReqErr != nil {
+			nextResp, failReason, sendErr := s.sendCodexContinueNextRound(ctx, c, account, nextBody, token, promptCacheKey, isCodexCLI)
+			if sendErr != nil {
 				trace.Status = "failed"
-				trace.Reason = "build_continuation_failed"
+				trace.Reason = failReason
 				incompleteUsage := codexContinueAgentUsage(firstRawUsage, usageSum, round.rawUsage, false)
-				writeEvent(codexContinueSyntheticIncomplete(baseResponse, finalOutput, incompleteUsage, seq.Take(), "build_continuation_failed", roundsInfo, usageSum.Raw()))
-				return &codexContinueFoldResult{usage: totalUsage, firstTokenMs: firstTokenMs, responseID: firstVisibleResponseID, imageCount: imageCounter.Count(), imageOutputSizes: imageCounter.Sizes(), trace: trace}, nil
-			}
-			proxyURL := ""
-			if account.ProxyID != nil && account.Proxy != nil {
-				proxyURL = account.Proxy.URL()
-			}
-			nextResp, doErr := s.httpUpstream.Do(nextReq, proxyURL, account.ID, account.Concurrency)
-			if doErr != nil {
-				trace.Status = "failed"
-				trace.Reason = "upstream_error"
-				incompleteUsage := codexContinueAgentUsage(firstRawUsage, usageSum, round.rawUsage, false)
-				writeEvent(codexContinueSyntheticIncomplete(baseResponse, finalOutput, incompleteUsage, seq.Take(), "upstream_error", roundsInfo, usageSum.Raw()))
-				return &codexContinueFoldResult{usage: totalUsage, firstTokenMs: firstTokenMs, responseID: firstVisibleResponseID, imageCount: imageCounter.Count(), imageOutputSizes: imageCounter.Sizes(), trace: trace}, nil
-			}
-			if nextResp.StatusCode >= 400 {
-				trace.Status = "failed"
-				trace.Reason = "upstream_error"
-				body, _ := io.ReadAll(io.LimitReader(nextResp.Body, openAIUpstreamErrorBodyReadLimitForConfig(s.cfg)))
-				_ = nextResp.Body.Close()
-				logger.LegacyPrintf("service.openai_gateway", "[OpenAI] Codex continuation failed account=%d status=%d body=%s", account.ID, nextResp.StatusCode, truncateString(string(body), 1024))
-				incompleteUsage := codexContinueAgentUsage(firstRawUsage, usageSum, round.rawUsage, false)
-				writeEvent(codexContinueSyntheticIncomplete(baseResponse, finalOutput, incompleteUsage, seq.Take(), "upstream_error", roundsInfo, usageSum.Raw()))
+				writeEvent(codexContinueSyntheticIncomplete(baseResponse, finalOutput, incompleteUsage, seq.Take(), failReason, roundsInfo, usageSum.Raw()))
 				return &codexContinueFoldResult{usage: totalUsage, firstTokenMs: firstTokenMs, responseID: firstVisibleResponseID, imageCount: imageCounter.Count(), imageOutputSizes: imageCounter.Sizes(), trace: trace}, nil
 			}
 			currentResp = nextResp
 			continue
 		}
+
+		if isLowReasoningRetry {
+			nextBody, marshalErr := marshalOpenAIUpstreamJSON(base)
+			if marshalErr == nil {
+				nextResp, _, sendErr := s.sendCodexContinueNextRound(ctx, c, account, nextBody, token, promptCacheKey, isCodexCLI)
+				if sendErr == nil {
+					pendingLowReasoningRound = round
+					currentResp = nextResp
+					continue
+				}
+			}
+			// 重试请求本身发起失败：保留首轮已经拿到的正常答案，不因为"多试一次"的失败丢掉它
+			stopReason = "low_reasoning_retry_send_failed"
+		}
+
+		finalRound := round
+		if pendingLowReasoningRound != nil {
+			if !round.sawTerminal || codexContinueReasoningTokens(pendingLowReasoningRound.rawUsage) > reasoningTokens {
+				finalRound = pendingLowReasoningRound
+				stopReason = "low_reasoning_retry_used"
+			}
+			trace.Rounds[finalRound.roundNo-1].Winner = true
+			pendingLowReasoningRound = nil
+		}
+		for _, item := range finalRound.reasoningItems {
+			finalOutput = append(finalOutput, cloneJSONMap(item))
+		}
+		round = finalRound
 
 		if !round.sawTerminal {
 			trace.Status = "failed"
@@ -370,6 +389,30 @@ func (s *OpenAIGatewayService) foldCodexContinueStream(
 		logger.LegacyPrintf("service.openai_gateway", "[OpenAI] Codex continuation completed account=%d response_id=%s rounds=%d usage_in=%d usage_out=%d", account.ID, firstVisibleResponseID, roundNo, totalUsage.InputTokens, totalUsage.OutputTokens)
 		return &codexContinueFoldResult{usage: totalUsage, firstTokenMs: firstTokenMs, responseID: firstVisibleResponseID, imageCount: imageCounter.Count(), imageOutputSizes: imageCounter.Sizes(), trace: trace}, nil
 	}
+}
+
+// sendCodexContinueNextRound 发起下一轮上游请求，供截断续写和低推理重试共用。
+// 返回的 string 是失败时的 stopReason（build_continuation_failed/upstream_error）。
+func (s *OpenAIGatewayService) sendCodexContinueNextRound(ctx context.Context, c *gin.Context, account *Account, nextBody []byte, token, promptCacheKey string, isCodexCLI bool) (*http.Response, string, error) {
+	nextReq, err := s.buildUpstreamRequest(ctx, c, account, nextBody, token, true, promptCacheKey, isCodexCLI)
+	if err != nil {
+		return nil, "build_continuation_failed", err
+	}
+	proxyURL := ""
+	if account.ProxyID != nil && account.Proxy != nil {
+		proxyURL = account.Proxy.URL()
+	}
+	nextResp, err := s.httpUpstream.Do(nextReq, proxyURL, account.ID, account.Concurrency)
+	if err != nil {
+		return nil, "upstream_error", err
+	}
+	if nextResp.StatusCode >= 400 {
+		body, _ := io.ReadAll(io.LimitReader(nextResp.Body, openAIUpstreamErrorBodyReadLimitForConfig(s.cfg)))
+		_ = nextResp.Body.Close()
+		logger.LegacyPrintf("service.openai_gateway", "[OpenAI] Codex continuation failed account=%d status=%d body=%s", account.ID, nextResp.StatusCode, truncateString(string(body), 1024))
+		return nil, "upstream_error", fmt.Errorf("upstream status %d", nextResp.StatusCode)
+	}
+	return nextResp, "", nil
 }
 
 func (s *OpenAIGatewayService) readCodexContinueRound(
@@ -601,11 +644,11 @@ func codexContinueShouldContinue(tokens int) bool {
 	return n >= codexContinueMinN
 }
 
-func codexContinueShouldContinueRound(roundNo, tokens int) bool {
-	if codexContinueShouldContinue(tokens) {
-		return true
-	}
-	return roundNo == 1 && tokens > 0 && tokens < codexContinueFirstRoundMin
+// codexContinueIsLowReasoningRetryCandidate 判断首轮是否需要整体重问一遍（reroll）。
+// 只在首轮生效：推理量落在 [floor, ceil) 之间，说明模型自己认为已经想完但想得不够多；
+// 不要求 encrypted_content，因为重试是重新发送原始请求，不回放任何 reasoning。
+func codexContinueIsLowReasoningRetryCandidate(roundNo, tokens int) bool {
+	return roundNo == 1 && tokens >= codexContinueLowReasoningFloor && tokens < codexContinueFirstRoundMin
 }
 
 func codexContinueReasoningTokens(usage map[string]any) int {
