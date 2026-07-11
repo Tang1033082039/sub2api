@@ -23,6 +23,7 @@ const (
 	codexContinueTruncationStep = 518
 	codexContinueMaxContinue    = 3
 	codexContinueMinN           = 1
+	codexContinueFirstRoundMin  = codexContinueTruncationStep - 2
 	codexContinueMarkerText     = "Continue thinking..."
 	openAISSEDone               = "[DONE]"
 )
@@ -236,7 +237,7 @@ func (s *OpenAIGatewayService) foldCodexContinueStream(
 			_, hasEncrypted = last["encrypted_content"].(string)
 		}
 		doContinue := round.sawTerminal &&
-			codexContinueShouldContinue(reasoningTokens) &&
+			codexContinueShouldContinueRound(roundNo, reasoningTokens) &&
 			hasEncrypted &&
 			roundNo <= codexContinueMaxContinue
 
@@ -558,6 +559,13 @@ func codexContinueTierN(tokens int) int {
 func codexContinueShouldContinue(tokens int) bool {
 	n := codexContinueTierN(tokens)
 	return n >= codexContinueMinN
+}
+
+func codexContinueShouldContinueRound(roundNo, tokens int) bool {
+	if codexContinueShouldContinue(tokens) {
+		return true
+	}
+	return roundNo == 1 && tokens > 0 && tokens < codexContinueFirstRoundMin
 }
 
 func codexContinueReasoningTokens(usage map[string]any) int {
