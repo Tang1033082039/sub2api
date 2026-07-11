@@ -61,6 +61,7 @@ func (s *OpenAIGatewayService) Forward(ctx context.Context, c *gin.Context, acco
 	setOpenAICompatMessagesBridgeContext(c, compatMessagesBridge)
 
 	isCodexCLI := openai.IsCodexOfficialClientByHeaders(c.GetHeader("User-Agent"), c.GetHeader("originator")) || (s.cfg != nil && s.cfg.Gateway.ForceCodexCLI)
+	codexContinueEnabled := shouldUseCodexContinueFold(c, account, reqStream, isCodexCLI)
 	codexImageGenerationExplicitToolPolicy := codexImageGenerationExplicitToolPolicyAllow
 	if isCodexCLI {
 		codexImageGenerationExplicitToolPolicy = account.CodexImageGenerationExplicitToolPolicy()
@@ -69,6 +70,11 @@ func (s *OpenAIGatewayService) Forward(ctx context.Context, c *gin.Context, acco
 	clientTransport := GetOpenAIClientTransport(c)
 	// 仅允许 WS 入站请求走 WS 上游，避免出现 HTTP -> WS 协议混用。
 	wsDecision = resolveOpenAIWSDecisionByClientTransport(wsDecision, clientTransport)
+	// 连续推理需要在一条响应中折叠多轮上游结果；WSv2 当前没有对应的折叠器。
+	// 对已灰度启用的用户固定走 HTTP SSE，避免开关命中后被 WS 分支绕过。
+	if codexContinueEnabled {
+		wsDecision = openAIWSHTTPDecision("codex_continue_fold")
+	}
 	if c != nil {
 		c.Set("openai_ws_transport_decision", string(wsDecision.Transport))
 		c.Set("openai_ws_transport_reason", wsDecision.Reason)
@@ -98,7 +104,7 @@ func (s *OpenAIGatewayService) Forward(ctx context.Context, c *gin.Context, acco
 		return nil, errors.New("openai ws v1 is temporarily unsupported; use ws v2")
 	}
 	passthroughEnabled := account.IsOpenAIPassthroughEnabled()
-	if passthroughEnabled {
+	if passthroughEnabled && !codexContinueEnabled {
 		if isCodexCLI && codexImageGenerationExplicitToolPolicy == codexImageGenerationExplicitToolPolicyStrip {
 			strippedBody, changed, stripErr := stripOpenAIImageGenerationToolsFromRawPayload(body)
 			if stripErr != nil {
@@ -783,7 +789,7 @@ func (s *OpenAIGatewayService) Forward(ctx context.Context, c *gin.Context, acco
 		if reqStream {
 			var streamResult *openaiStreamingResult
 			var err error
-			if shouldUseCodexContinueFold(c, account, reqStream, isCodexCLI) {
+			if codexContinueEnabled {
 				streamResult, err = s.handleCodexContinueStreamingResponse(ctx, resp, c, account, body, token, promptCacheKey, isCodexCLI, startTime, originalModel, upstreamModel)
 			} else {
 				streamResult, err = s.handleStreamingResponse(ctx, resp, c, account, startTime, originalModel, upstreamModel)

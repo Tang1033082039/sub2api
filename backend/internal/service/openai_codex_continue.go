@@ -23,7 +23,6 @@ const (
 	codexContinueTruncationStep = 518
 	codexContinueMaxContinue    = 3
 	codexContinueMinN           = 1
-	codexContinueMaxN           = 6
 	codexContinueMarkerText     = "Continue thinking..."
 	openAISSEDone               = "[DONE]"
 )
@@ -558,10 +557,7 @@ func codexContinueTierN(tokens int) int {
 
 func codexContinueShouldContinue(tokens int) bool {
 	n := codexContinueTierN(tokens)
-	if n < codexContinueMinN {
-		return false
-	}
-	return codexContinueMaxN == 0 || n <= codexContinueMaxN
+	return n >= codexContinueMinN
 }
 
 func codexContinueReasoningTokens(usage map[string]any) int {
