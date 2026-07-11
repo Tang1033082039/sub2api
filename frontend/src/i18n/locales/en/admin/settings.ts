@@ -302,7 +302,9 @@ export default {
         title: 'Gateway Scheduling Settings',
         description: 'Control API Key scheduling behavior',
         allowUngroupedKey: 'Allow Ungrouped Key Scheduling',
-        allowUngroupedKeyHint: 'When disabled, API Keys not assigned to any group cannot make requests (403 Forbidden). Keep disabled to ensure all Keys belong to a specific group.'
+        allowUngroupedKeyHint: 'When disabled, API Keys not assigned to any group cannot make requests (403 Forbidden). Keep disabled to ensure all Keys belong to a specific group.',
+        upstreamSiteAffinity: 'Upstream Site Affinity',
+        upstreamSiteAffinityHint: 'Prefer the previous upstream site. Site-level failures switch sites; account-level failures try another account on the same site first.'
       },
       gatewayForwarding: {
         title: 'Request Forwarding',

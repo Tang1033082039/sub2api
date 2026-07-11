@@ -48,6 +48,16 @@ type FailoverState struct {
 	LastFailoverErr       *service.UpstreamFailoverError
 	ForceCacheBilling     bool
 	hasBoundSession       bool
+	requestCtx            context.Context
+}
+
+// RequestContext returns the request-local site exclusions accumulated while
+// handling failover. It is intentionally not written to shared scheduler state.
+func (s *FailoverState) RequestContext(ctx context.Context) context.Context {
+	if s != nil && s.requestCtx != nil {
+		return s.requestCtx
+	}
+	return ctx
 }
 
 // NewFailoverState 创建 failover 状态
@@ -77,7 +87,7 @@ func (s *FailoverState) HandleFailoverError(
 	}
 
 	// 同账号重试：对 RetryableOnSameAccount 的临时性错误，先在同一账号上重试
-	if failoverErr.RetryableOnSameAccount && s.SameAccountRetryCount[accountID] < maxSameAccountRetries {
+	if failoverErr.RetryableOnSameAccount && !service.IsUpstreamSiteLevelFailure(failoverErr.StatusCode) && s.SameAccountRetryCount[accountID] < maxSameAccountRetries {
 		s.SameAccountRetryCount[accountID]++
 		logger.FromContext(ctx).Warn("gateway.failover_same_account_retry",
 			zap.Int64("account_id", accountID),
@@ -92,7 +102,7 @@ func (s *FailoverState) HandleFailoverError(
 	}
 
 	// 同账号重试用尽，执行临时封禁
-	if failoverErr.RetryableOnSameAccount {
+	if failoverErr.RetryableOnSameAccount && !service.IsUpstreamSiteLevelFailure(failoverErr.StatusCode) {
 		gatewayService.TempUnscheduleRetryableError(ctx, accountID, failoverErr)
 	}
 
@@ -122,6 +132,15 @@ func (s *FailoverState) HandleFailoverError(
 	}
 
 	return FailoverContinue
+}
+
+// ExcludeFailedUpstreamSite records a site-level upstream failure for this
+// request only. Account-level errors remain eligible for same-site failover.
+func (s *FailoverState) ExcludeFailedUpstreamSite(ctx context.Context, account *service.Account, failoverErr *service.UpstreamFailoverError) {
+	if s == nil || failoverErr == nil || !service.IsUpstreamSiteLevelFailure(failoverErr.StatusCode) {
+		return
+	}
+	s.requestCtx = service.ExcludeFailedUpstreamSite(ctx, account, failoverErr.StatusCode)
 }
 
 // HandleSelectionExhausted 处理选号失败（所有候选账号都在排除列表中）时的退避重试决策。

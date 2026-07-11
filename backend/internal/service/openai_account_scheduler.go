@@ -922,7 +922,7 @@ func (s *defaultOpenAIAccountScheduler) buildOpenAISelectionOrder(
 				}
 			}
 		}
-		return buildOpenAIWeightedSelectionOrder(ranked, req)
+		return preferOpenAIUpstreamSiteCandidates(buildOpenAIWeightedSelectionOrder(ranked, req), req.PreferredSiteKey)
 	}
 
 	if req.RequireCompact {
@@ -946,6 +946,25 @@ func (s *defaultOpenAIAccountScheduler) buildOpenAISelectionOrder(
 	}
 
 	return buildSelectionOrder(plan.candidates)
+}
+
+func preferOpenAIUpstreamSiteCandidates(candidates []openAIAccountCandidateScore, preferredSiteKey string) []openAIAccountCandidateScore {
+	if strings.TrimSpace(preferredSiteKey) == "" || len(candidates) < 2 {
+		return candidates
+	}
+	preferred := make([]openAIAccountCandidateScore, 0, len(candidates))
+	fallback := make([]openAIAccountCandidateScore, 0, len(candidates))
+	for _, candidate := range candidates {
+		if accountUpstreamSiteKey(candidate.account) == preferredSiteKey {
+			preferred = append(preferred, candidate)
+		} else {
+			fallback = append(fallback, candidate)
+		}
+	}
+	if len(preferred) == 0 {
+		return candidates
+	}
+	return append(preferred, fallback...)
 }
 
 func sortOpenAICompactRetryCandidates(pool []openAIAccountCandidateScore) []openAIAccountCandidateScore {
@@ -1379,7 +1398,7 @@ func (s *defaultOpenAIAccountScheduler) isAccountRequestCompatible(ctx context.C
 	if s != nil && s.service != nil && s.service.isOpenAIAccountRuntimeBlocked(account) {
 		return false
 	}
-	if strings.TrimSpace(req.PreferredSiteKey) != "" && accountUpstreamSiteKey(account) != strings.TrimSpace(req.PreferredSiteKey) {
+	if isUpstreamSiteExcluded(ctx, account) {
 		return false
 	}
 	// Quota auto-pause must be evaluated during the initial filter too. Without it the

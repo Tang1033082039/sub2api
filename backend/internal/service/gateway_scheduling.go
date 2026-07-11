@@ -551,7 +551,7 @@ func (s *GatewayService) SelectAccountWithLoadAwareness(ctx context.Context, gro
 					"rpm_ok", rpmOK,
 				)
 
-				if !clearSticky && platformOK && modelSupported && modelSchedulable && quotaOK && windowCostOK && rpmOK && schedulable {
+				if !clearSticky && !isUpstreamSiteExcluded(ctx, account) && platformOK && modelSupported && modelSchedulable && quotaOK && windowCostOK && rpmOK && schedulable {
 					result, err := s.tryAcquireAccountSlot(ctx, accountID, account.Concurrency)
 					if err == nil && result.Acquired {
 						// 会话数量限制检查
@@ -641,6 +641,9 @@ func (s *GatewayService) SelectAccountWithLoadAwareness(ctx context.Context, gro
 		if isExcluded(acc.ID) {
 			continue
 		}
+		if isUpstreamSiteExcluded(ctx, acc) {
+			continue
+		}
 		// Scheduler snapshots can be temporarily stale (bucket rebuild is throttled);
 		// re-check schedulability here so recently rate-limited/overloaded accounts
 		// are not selected again before the bucket is rebuilt.
@@ -670,6 +673,7 @@ func (s *GatewayService) SelectAccountWithLoadAwareness(ctx context.Context, gro
 		}
 		candidates = append(candidates, acc)
 	}
+	preferredSiteKey := s.preferredUpstreamSiteKey(ctx, groupID, sessionHash)
 
 	if len(candidates) == 0 {
 		return nil, ErrNoAvailableAccounts
@@ -685,7 +689,7 @@ func (s *GatewayService) SelectAccountWithLoadAwareness(ctx context.Context, gro
 
 	loadMap, err := s.concurrencyService.GetAccountsLoadBatch(ctx, accountLoads)
 	if err != nil {
-		if result, ok, legacyErr := s.tryAcquireByLegacyOrder(ctx, candidates, groupID, sessionHash, preferOAuth); legacyErr != nil {
+		if result, ok, legacyErr := s.tryAcquireByLegacyOrder(ctx, preferUpstreamSiteCandidates(candidates, preferredSiteKey), groupID, sessionHash, preferOAuth); legacyErr != nil {
 			return nil, legacyErr
 		} else if ok {
 			return result, nil
@@ -708,7 +712,8 @@ func (s *GatewayService) SelectAccountWithLoadAwareness(ctx context.Context, gro
 		// 分层过滤选择：优先级 →（可选）最早重置 → 负载率 → LRU
 		for len(available) > 0 {
 			// 1. 取优先级最小的集合
-			candidates := filterByMinPriority(available)
+			candidates := filterByPreferredUpstreamSite(available, preferredSiteKey)
+			candidates = filterByMinPriority(candidates)
 			// 2. （可选）use-it-or-lose-it：优先选用会话窗口最早重置的账号
 			if cfg.PreferSoonestReset {
 				candidates = filterBySoonestReset(candidates)
@@ -748,6 +753,7 @@ func (s *GatewayService) SelectAccountWithLoadAwareness(ctx context.Context, gro
 
 	// ============ Layer 3: 兜底排队 ============
 	s.sortCandidatesForFallback(candidates, preferOAuth, cfg.FallbackSelectionMode)
+	candidates = preferUpstreamSiteCandidates(candidates, preferredSiteKey)
 	for _, acc := range candidates {
 		// 会话数量限制检查（等待计划也需要占用会话配额）
 		if !s.checkAndRegisterSession(ctx, acc, sessionHash) {
@@ -761,6 +767,41 @@ func (s *GatewayService) SelectAccountWithLoadAwareness(ctx context.Context, gro
 		})
 	}
 	return nil, ErrNoAvailableAccounts
+}
+
+func preferUpstreamSiteCandidates(candidates []*Account, preferredSiteKey string) []*Account {
+	if preferredSiteKey == "" || len(candidates) < 2 {
+		return candidates
+	}
+	preferred := make([]*Account, 0, len(candidates))
+	fallback := make([]*Account, 0, len(candidates))
+	for _, account := range candidates {
+		if accountUpstreamSiteKey(account) == preferredSiteKey {
+			preferred = append(preferred, account)
+		} else {
+			fallback = append(fallback, account)
+		}
+	}
+	if len(preferred) == 0 {
+		return candidates
+	}
+	return append(preferred, fallback...)
+}
+
+func filterByPreferredUpstreamSite(candidates []accountWithLoad, preferredSiteKey string) []accountWithLoad {
+	if preferredSiteKey == "" || len(candidates) < 2 {
+		return candidates
+	}
+	preferred := make([]accountWithLoad, 0, len(candidates))
+	for _, candidate := range candidates {
+		if accountUpstreamSiteKey(candidate.account) == preferredSiteKey {
+			preferred = append(preferred, candidate)
+		}
+	}
+	if len(preferred) == 0 {
+		return candidates
+	}
+	return preferred
 }
 
 func (s *GatewayService) tryAcquireByLegacyOrder(ctx context.Context, candidates []*Account, groupID *int64, sessionHash string, preferOAuth bool) (*AccountSelectionResult, bool, error) {
@@ -1771,7 +1812,7 @@ func (s *GatewayService) selectAccountForModelWithPlatform(ctx context.Context, 
 						if clearSticky {
 							_ = s.cache.DeleteSessionAccountID(ctx, derefGroupID(groupID), sessionHash)
 						}
-						if !clearSticky && (preferredSiteKey == "" || accountUpstreamSiteKey(account) == preferredSiteKey) && s.isAccountInGroup(account, groupID) && account.Platform == platform && (requestedModel == "" || s.isModelSupportedByAccountWithContext(ctx, account, requestedModel)) && s.isAccountSchedulableForModelSelection(ctx, account, requestedModel) && s.isAccountSchedulableForQuota(account) && s.isAccountSchedulableForWindowCost(ctx, account, true) && s.isAccountSchedulableForRPM(ctx, account, true) && !s.isStickyAccountUpstreamRestricted(ctx, groupID, account, requestedModel) {
+						if !clearSticky && !isUpstreamSiteExcluded(ctx, account) && s.isAccountInGroup(account, groupID) && account.Platform == platform && (requestedModel == "" || s.isModelSupportedByAccountWithContext(ctx, account, requestedModel)) && s.isAccountSchedulableForModelSelection(ctx, account, requestedModel) && s.isAccountSchedulableForQuota(account) && s.isAccountSchedulableForWindowCost(ctx, account, true) && s.isAccountSchedulableForRPM(ctx, account, true) && !s.isStickyAccountUpstreamRestricted(ctx, groupID, account, requestedModel) {
 							if s.debugModelRoutingEnabled() {
 								logger.LegacyPrintf("service.gateway", "[ModelRoutingDebug] legacy routed sticky hit: group_id=%v model=%s session=%s account=%d", derefGroupID(groupID), requestedModel, shortSessionHash(sessionHash), accountID)
 							}
@@ -1814,7 +1855,7 @@ func (s *GatewayService) selectAccountForModelWithPlatform(ctx context.Context, 
 			if _, excluded := excludedIDs[acc.ID]; excluded {
 				continue
 			}
-			if preferredSiteKey != "" && accountUpstreamSiteKey(acc) != preferredSiteKey {
+			if isUpstreamSiteExcluded(ctx, acc) {
 				continue
 			}
 			// Scheduler snapshots can be temporarily stale; re-check schedulability here to
@@ -1893,7 +1934,7 @@ func (s *GatewayService) selectAccountForModelWithPlatform(ctx context.Context, 
 					if clearSticky {
 						_ = s.cache.DeleteSessionAccountID(ctx, derefGroupID(groupID), sessionHash)
 					}
-					if !clearSticky && (preferredSiteKey == "" || accountUpstreamSiteKey(account) == preferredSiteKey) && s.isAccountInGroup(account, groupID) && account.Platform == platform && (requestedModel == "" || s.isModelSupportedByAccountWithContext(ctx, account, requestedModel)) && s.isAccountSchedulableForModelSelection(ctx, account, requestedModel) && s.isAccountSchedulableForQuota(account) && s.isAccountSchedulableForWindowCost(ctx, account, true) && s.isAccountSchedulableForRPM(ctx, account, true) {
+					if !clearSticky && !isUpstreamSiteExcluded(ctx, account) && s.isAccountInGroup(account, groupID) && account.Platform == platform && (requestedModel == "" || s.isModelSupportedByAccountWithContext(ctx, account, requestedModel)) && s.isAccountSchedulableForModelSelection(ctx, account, requestedModel) && s.isAccountSchedulableForQuota(account) && s.isAccountSchedulableForWindowCost(ctx, account, true) && s.isAccountSchedulableForRPM(ctx, account, true) {
 						return account, nil
 					}
 				}
@@ -1928,7 +1969,7 @@ func (s *GatewayService) selectAccountForModelWithPlatform(ctx context.Context, 
 		if _, excluded := excludedIDs[acc.ID]; excluded {
 			continue
 		}
-		if preferredSiteKey != "" && accountUpstreamSiteKey(acc) != preferredSiteKey {
+		if isUpstreamSiteExcluded(ctx, acc) {
 			continue
 		}
 		// Scheduler snapshots can be temporarily stale; re-check schedulability here to
@@ -1963,6 +2004,17 @@ func (s *GatewayService) selectAccountForModelWithPlatform(ctx context.Context, 
 		if selected == nil {
 			selected = acc
 			continue
+		}
+		if preferredSiteKey != "" {
+			selectedPreferred := accountUpstreamSiteKey(selected) == preferredSiteKey
+			candidatePreferred := accountUpstreamSiteKey(acc) == preferredSiteKey
+			if candidatePreferred && !selectedPreferred {
+				selected = acc
+				continue
+			}
+			if selectedPreferred && !candidatePreferred {
+				continue
+			}
 		}
 		if acc.Priority < selected.Priority {
 			selected = acc
@@ -2035,7 +2087,7 @@ func (s *GatewayService) selectAccountWithMixedScheduling(ctx context.Context, g
 						if clearSticky {
 							_ = s.cache.DeleteSessionAccountID(ctx, derefGroupID(groupID), sessionHash)
 						}
-						if !clearSticky && (preferredSiteKey == "" || accountUpstreamSiteKey(account) == preferredSiteKey) && s.isAccountInGroup(account, groupID) && (requestedModel == "" || s.isModelSupportedByAccountWithContext(ctx, account, requestedModel)) && s.isAccountSchedulableForModelSelection(ctx, account, requestedModel) && s.isAccountSchedulableForQuota(account) && s.isAccountSchedulableForWindowCost(ctx, account, true) && s.isAccountSchedulableForRPM(ctx, account, true) {
+						if !clearSticky && !isUpstreamSiteExcluded(ctx, account) && s.isAccountInGroup(account, groupID) && (requestedModel == "" || s.isModelSupportedByAccountWithContext(ctx, account, requestedModel)) && s.isAccountSchedulableForModelSelection(ctx, account, requestedModel) && s.isAccountSchedulableForQuota(account) && s.isAccountSchedulableForWindowCost(ctx, account, true) && s.isAccountSchedulableForRPM(ctx, account, true) {
 							if account.Platform == nativePlatform || (account.Platform == PlatformAntigravity && account.IsMixedSchedulingEnabled()) {
 								if s.debugModelRoutingEnabled() {
 									logger.LegacyPrintf("service.gateway", "[ModelRoutingDebug] legacy mixed routed sticky hit: group_id=%v model=%s session=%s account=%d", derefGroupID(groupID), requestedModel, shortSessionHash(sessionHash), accountID)
@@ -2076,7 +2128,7 @@ func (s *GatewayService) selectAccountWithMixedScheduling(ctx context.Context, g
 			if _, excluded := excludedIDs[acc.ID]; excluded {
 				continue
 			}
-			if preferredSiteKey != "" && accountUpstreamSiteKey(acc) != preferredSiteKey {
+			if isUpstreamSiteExcluded(ctx, acc) {
 				continue
 			}
 			// Scheduler snapshots can be temporarily stale; re-check schedulability here to
@@ -2159,7 +2211,7 @@ func (s *GatewayService) selectAccountWithMixedScheduling(ctx context.Context, g
 					if clearSticky {
 						_ = s.cache.DeleteSessionAccountID(ctx, derefGroupID(groupID), sessionHash)
 					}
-					if !clearSticky && (preferredSiteKey == "" || accountUpstreamSiteKey(account) == preferredSiteKey) && s.isAccountInGroup(account, groupID) && (requestedModel == "" || s.isModelSupportedByAccountWithContext(ctx, account, requestedModel)) && s.isAccountSchedulableForModelSelection(ctx, account, requestedModel) && s.isAccountSchedulableForQuota(account) && s.isAccountSchedulableForWindowCost(ctx, account, true) && s.isAccountSchedulableForRPM(ctx, account, true) && !s.isStickyAccountUpstreamRestricted(ctx, groupID, account, requestedModel) {
+					if !clearSticky && !isUpstreamSiteExcluded(ctx, account) && s.isAccountInGroup(account, groupID) && (requestedModel == "" || s.isModelSupportedByAccountWithContext(ctx, account, requestedModel)) && s.isAccountSchedulableForModelSelection(ctx, account, requestedModel) && s.isAccountSchedulableForQuota(account) && s.isAccountSchedulableForWindowCost(ctx, account, true) && s.isAccountSchedulableForRPM(ctx, account, true) && !s.isStickyAccountUpstreamRestricted(ctx, groupID, account, requestedModel) {
 						if account.Platform == nativePlatform || (account.Platform == PlatformAntigravity && account.IsMixedSchedulingEnabled()) {
 							return account, nil
 						}
@@ -2191,7 +2243,7 @@ func (s *GatewayService) selectAccountWithMixedScheduling(ctx context.Context, g
 		if _, excluded := excludedIDs[acc.ID]; excluded {
 			continue
 		}
-		if preferredSiteKey != "" && accountUpstreamSiteKey(acc) != preferredSiteKey {
+		if isUpstreamSiteExcluded(ctx, acc) {
 			continue
 		}
 		// Scheduler snapshots can be temporarily stale; re-check schedulability here to
@@ -2230,6 +2282,17 @@ func (s *GatewayService) selectAccountWithMixedScheduling(ctx context.Context, g
 		if selected == nil {
 			selected = acc
 			continue
+		}
+		if preferredSiteKey != "" {
+			selectedPreferred := accountUpstreamSiteKey(selected) == preferredSiteKey
+			candidatePreferred := accountUpstreamSiteKey(acc) == preferredSiteKey
+			if candidatePreferred && !selectedPreferred {
+				selected = acc
+				continue
+			}
+			if selectedPreferred && !candidatePreferred {
+				continue
+			}
 		}
 		if acc.Priority < selected.Priority {
 			selected = acc

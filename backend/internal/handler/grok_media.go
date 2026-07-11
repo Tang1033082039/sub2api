@@ -252,7 +252,7 @@ func (h *OpenAIGatewayHandler) handleGrokMedia(c *gin.Context, endpoint service.
 					h.handleFailoverExhausted(c, failoverErr, true)
 					return
 				}
-				if failoverErr.RetryableOnSameAccount {
+				if failoverErr.RetryableOnSameAccount && !service.IsUpstreamSiteLevelFailure(failoverErr.StatusCode) {
 					retryLimit := account.GetPoolModeRetryCount()
 					if sameAccountRetryCount[account.ID] < retryLimit {
 						sameAccountRetryCount[account.ID]++
@@ -271,6 +271,7 @@ func (h *OpenAIGatewayHandler) handleGrokMedia(c *gin.Context, endpoint service.
 					}
 				}
 				h.gatewayService.RecordOpenAIAccountSwitch()
+				requestCtx = service.ExcludeFailedUpstreamSite(requestCtx, account, failoverErr.StatusCode)
 				failedAccountIDs[account.ID] = struct{}{}
 				lastFailoverErr = failoverErr
 				if switchCount >= maxAccountSwitches {

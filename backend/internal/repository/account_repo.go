@@ -586,6 +586,9 @@ func (r *accountRepository) accountListFilteredQuery(filters service.AccountList
 	if cleanupStatus != "" {
 		q = q.Where(dbpredicate.Account(func(s *entsql.Selector) {
 			s.Where(sqljson.ValueEQ(dbaccount.FieldExtra, cleanupStatus, sqljson.Path("cleanup_status")))
+			if cleanupStatus == "pending" {
+				s.Where(entsql.EQ(s.C(dbaccount.FieldSchedulable), false))
+			}
 		}))
 	}
 	if integrationSource != "" {

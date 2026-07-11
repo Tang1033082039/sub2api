@@ -475,6 +475,41 @@ func accountUpstreamSiteKey(account *Account) string {
 	return account.Platform + "|" + baseURL
 }
 
+type upstreamSiteExclusionsContextKey struct{}
+
+// ExcludeFailedUpstreamSite keeps a site-level failure scoped to the current request.
+// Authentication and quota errors stay account-scoped so another account on the same
+// site remains eligible.
+func ExcludeFailedUpstreamSite(ctx context.Context, account *Account, statusCode int) context.Context {
+	if ctx == nil || account == nil || !IsUpstreamSiteLevelFailure(statusCode) {
+		return ctx
+	}
+	siteKey := accountUpstreamSiteKey(account)
+	if siteKey == "" {
+		return ctx
+	}
+	excluded, _ := ctx.Value(upstreamSiteExclusionsContextKey{}).(map[string]struct{})
+	next := make(map[string]struct{}, len(excluded)+1)
+	for key := range excluded {
+		next[key] = struct{}{}
+	}
+	next[siteKey] = struct{}{}
+	return context.WithValue(ctx, upstreamSiteExclusionsContextKey{}, next)
+}
+
+func isUpstreamSiteExcluded(ctx context.Context, account *Account) bool {
+	if ctx == nil || account == nil {
+		return false
+	}
+	excluded, _ := ctx.Value(upstreamSiteExclusionsContextKey{}).(map[string]struct{})
+	_, found := excluded[accountUpstreamSiteKey(account)]
+	return found
+}
+
+func IsUpstreamSiteLevelFailure(statusCode int) bool {
+	return statusCode == http.StatusTooManyRequests || statusCode == http.StatusBadGateway || statusCode == http.StatusServiceUnavailable || statusCode == http.StatusGatewayTimeout
+}
+
 // derefGroupID safely dereferences *int64 to int64, returning 0 if nil
 func derefGroupID(groupID *int64) int64 {
 	if groupID == nil {

@@ -86,6 +86,8 @@ export default {
       allTypes: 'All Types',
       allStatus: 'All Status',
       allGroups: 'All Groups',
+      allCleanupStatus: 'All Cleanup Statuses',
+      cleanupPending: 'Cleanup Pending',
       ungroupedGroup: 'Ungrouped',
       oauthType: 'OAuth',
       setupToken: 'Setup Token',

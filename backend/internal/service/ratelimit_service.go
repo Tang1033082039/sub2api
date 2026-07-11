@@ -1836,6 +1836,14 @@ func (s *RateLimitService) RecoverAccountState(ctx context.Context, accountID in
 		}
 		result.RestoredSchedulable = true
 	}
+	if result.RestoredSchedulable && hasRecoverableCleanupState(account) {
+		if err := s.accountRepo.UpdateExtra(ctx, accountID, map[string]any{
+			"cleanup_status": "resolved",
+			"cleanup_reason": "",
+		}); err != nil {
+			return nil, err
+		}
+	}
 	if result.ClearedError || result.ClearedRateLimit || result.RestoredSchedulable {
 		s.ResetOpenAI403Counter(ctx, accountID)
 		if result.ClearedError && !result.ClearedRateLimit {

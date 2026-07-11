@@ -296,7 +296,9 @@ export default {
         title: '网关调度设置',
         description: '控制 API Key 的调度行为',
         allowUngroupedKey: '允许未分组 Key 调度',
-        allowUngroupedKeyHint: '关闭后，未分配到任何分组的 API Key 将无法发起请求（返回 403）。建议保持关闭以确保所有 Key 都归属明确的分组。'
+        allowUngroupedKeyHint: '关闭后，未分配到任何分组的 API Key 将无法发起请求（返回 403）。建议保持关闭以确保所有 Key 都归属明确的分组。',
+        upstreamSiteAffinity: '上游站点亲和',
+        upstreamSiteAffinityHint: '优先复用同站点账号；站点级异常时自动切换其他站点，账号级异常则优先在本站点换号。'
       },
       gatewayForwarding: {
         title: '请求转发行为',

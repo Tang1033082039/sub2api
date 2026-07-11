@@ -1620,6 +1620,7 @@ const accountMatchesCurrentFilters = (account: Account) => {
   if (filters.cleanup_status) {
     const cleanupStatus = typeof account.extra?.cleanup_status === 'string' ? account.extra.cleanup_status : ''
     if (cleanupStatus !== filters.cleanup_status) return false
+    if (filters.cleanup_status === 'pending' && account.schedulable) return false
   }
   if (filters.integration_source) {
     const integrationSource = typeof account.extra?.integration_source === 'string' ? account.extra.integration_source : ''

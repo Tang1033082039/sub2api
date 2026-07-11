@@ -664,7 +664,7 @@ func (s *OpenAIGatewayService) tryStickySessionHit(ctx context.Context, groupID 
 		_ = s.deleteStickySessionAccountID(ctx, groupID, sessionHash)
 		return nil
 	}
-	if preferredSiteKey != "" && accountUpstreamSiteKey(account) != preferredSiteKey {
+	if isUpstreamSiteExcluded(ctx, account) {
 		return nil
 	}
 
@@ -720,7 +720,7 @@ func (s *OpenAIGatewayService) selectBestAccount(ctx context.Context, groupID *i
 		if _, excluded := excludedIDs[acc.ID]; excluded {
 			continue
 		}
-		if preferredSiteKey != "" && accountUpstreamSiteKey(acc) != preferredSiteKey {
+		if isUpstreamSiteExcluded(ctx, acc) {
 			continue
 		}
 
@@ -750,6 +750,18 @@ func (s *OpenAIGatewayService) selectBestAccount(ctx context.Context, groupID *i
 			selected = fresh
 			selectedCompactTier = compactTier
 			continue
+		}
+		if preferredSiteKey != "" {
+			selectedPreferred := accountUpstreamSiteKey(selected) == preferredSiteKey
+			candidatePreferred := accountUpstreamSiteKey(fresh) == preferredSiteKey
+			if candidatePreferred && !selectedPreferred {
+				selected = fresh
+				selectedCompactTier = compactTier
+				continue
+			}
+			if selectedPreferred && !candidatePreferred {
+				continue
+			}
 		}
 
 		// compact 模式下高 tier 优先；同 tier 内才比较 priority/LRU。
@@ -881,7 +893,7 @@ func (s *OpenAIGatewayService) selectAccountWithLoadAwareness(ctx context.Contex
 				if clearSticky {
 					_ = s.deleteStickySessionAccountID(ctx, groupID, sessionHash)
 				}
-				if !clearSticky && (preferredSiteKey == "" || accountUpstreamSiteKey(account) == preferredSiteKey) && isOpenAICompatibleAccountEligibleForRequest(ctx, account, platform, requestedModel, false, requiredCapability) {
+				if !clearSticky && !isUpstreamSiteExcluded(ctx, account) && isOpenAICompatibleAccountEligibleForRequest(ctx, account, platform, requestedModel, false, requiredCapability) {
 					account = s.recheckSelectedOpenAIAccountFromDB(ctx, account, platform, requestedModel, requireCompact, requiredCapability)
 					if account == nil {
 						_ = s.deleteStickySessionAccountID(ctx, groupID, sessionHash)
@@ -941,7 +953,7 @@ func (s *OpenAIGatewayService) selectAccountWithLoadAwareness(ctx context.Contex
 		if isExcluded(acc.ID) {
 			continue
 		}
-		if preferredSiteKey != "" && accountUpstreamSiteKey(acc) != preferredSiteKey {
+		if isUpstreamSiteExcluded(ctx, acc) {
 			continue
 		}
 		// Scheduler snapshots can be temporarily stale (bucket rebuild is throttled);
@@ -962,6 +974,7 @@ func (s *OpenAIGatewayService) selectAccountWithLoadAwareness(ctx context.Contex
 		baseCandidateCount++
 		candidates = append(candidates, acc)
 	}
+	candidates = preferUpstreamSiteCandidates(candidates, preferredSiteKey)
 
 	if len(candidates) == 0 {
 		return nil, ErrNoAvailableAccounts

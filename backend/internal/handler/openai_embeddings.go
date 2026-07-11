@@ -106,10 +106,11 @@ func (h *OpenAIGatewayHandler) Embeddings(c *gin.Context) {
 		maxAccountSwitches = 3
 	}
 	routingStart := time.Now()
+	requestCtx := c.Request.Context()
 
 	for {
 		selection, _, err := h.gatewayService.SelectAccountWithSchedulerForCapability(
-			c.Request.Context(),
+			requestCtx,
 			apiKey.GroupID,
 			"",
 			"",
@@ -190,6 +191,7 @@ func (h *OpenAIGatewayHandler) Embeddings(c *gin.Context) {
 				}
 				h.gatewayService.ReportOpenAIAccountScheduleResult(account.ID, false, nil)
 				h.gatewayService.RecordOpenAIAccountSwitch()
+				requestCtx = service.ExcludeFailedUpstreamSite(requestCtx, account, failoverErr.StatusCode)
 				failedAccountIDs[account.ID] = struct{}{}
 				lastFailoverErr = failoverErr
 				if switchCount >= maxAccountSwitches {
