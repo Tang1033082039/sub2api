@@ -246,6 +246,7 @@ type OpenAIForwardResult struct {
 	VideoResolution    string
 	// VideoDurationSeconds 是提交时请求的生成时长（xAI 按输出秒数计费），已归一化到 1-15 秒。
 	VideoDurationSeconds int
+	CodexContinueTrace   *CodexContinueTrace
 
 	wsReplayInput       []json.RawMessage
 	wsReplayInputExists bool

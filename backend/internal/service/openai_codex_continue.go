@@ -34,6 +34,19 @@ type codexContinueFoldResult struct {
 	responseID       string
 	imageCount       int
 	imageOutputSizes []string
+	trace            *CodexContinueTrace
+}
+
+type CodexContinueTrace struct {
+	Status string                    `json:"status"`
+	Reason string                    `json:"reason,omitempty"`
+	Rounds []CodexContinueTraceRound `json:"rounds,omitempty"`
+}
+
+type CodexContinueTraceRound struct {
+	Round           int `json:"round"`
+	ReasoningTokens int `json:"reasoning_tokens"`
+	Tier            int `json:"tier"`
 }
 
 type codexContinueRound struct {
@@ -102,11 +115,12 @@ func (s *OpenAIGatewayService) handleCodexContinueStreamingResponse(
 		return nil, err
 	}
 	return &openaiStreamingResult{
-		usage:            result.usage,
-		firstTokenMs:     result.firstTokenMs,
-		responseID:       result.responseID,
-		imageCount:       result.imageCount,
-		imageOutputSizes: result.imageOutputSizes,
+		usage:              result.usage,
+		firstTokenMs:       result.firstTokenMs,
+		responseID:         result.responseID,
+		imageCount:         result.imageCount,
+		imageOutputSizes:   result.imageOutputSizes,
+		codexContinueTrace: result.trace,
 	}, err
 }
 
@@ -135,9 +149,12 @@ func (s *OpenAIGatewayService) foldCodexContinueStream(
 	}
 
 	w := c.Writer
+	trace := &CodexContinueTrace{}
 	flusher, ok := w.(http.Flusher)
 	if !ok {
-		return nil, errors.New("streaming not supported")
+		trace.Status = "failed"
+		trace.Reason = "streaming_not_supported"
+		return &codexContinueFoldResult{trace: trace}, errors.New("streaming not supported")
 	}
 	bufferedWriter := bufio.NewWriterSize(w, 4*1024)
 	clientDisconnected := false
@@ -186,7 +203,9 @@ func (s *OpenAIGatewayService) foldCodexContinueStream(
 
 	base, err := decodeCodexContinueBaseBody(baseBody)
 	if err != nil {
-		return nil, err
+		trace.Status = "failed"
+		trace.Reason = "invalid_request_body"
+		return &codexContinueFoldResult{trace: trace}, err
 	}
 	originalInput := cloneCodexContinueInput(base["input"])
 
@@ -216,12 +235,14 @@ func (s *OpenAIGatewayService) foldCodexContinueStream(
 			firstRawUsage = cloneJSONMap(round.rawUsage)
 		}
 		if readErr != nil {
+			trace.Status = "failed"
+			trace.Reason = "upstream_error"
 			if !round.sawTerminal {
 				incompleteUsage := codexContinueAgentUsage(firstRawUsage, usageSum, nil, false)
 				writeEvent(codexContinueSyntheticIncomplete(baseResponse, finalOutput, incompleteUsage, seq.Take(), "upstream_error", roundsInfo, usageSum.Raw()))
-				return &codexContinueFoldResult{usage: totalUsage, firstTokenMs: firstTokenMs, responseID: firstVisibleResponseID, imageCount: imageCounter.Count(), imageOutputSizes: imageCounter.Sizes()}, nil
+				return &codexContinueFoldResult{usage: totalUsage, firstTokenMs: firstTokenMs, responseID: firstVisibleResponseID, imageCount: imageCounter.Count(), imageOutputSizes: imageCounter.Sizes(), trace: trace}, nil
 			}
-			return &codexContinueFoldResult{usage: totalUsage, firstTokenMs: firstTokenMs, responseID: firstVisibleResponseID, imageCount: imageCounter.Count(), imageOutputSizes: imageCounter.Sizes()}, readErr
+			return &codexContinueFoldResult{usage: totalUsage, firstTokenMs: firstTokenMs, responseID: firstVisibleResponseID, imageCount: imageCounter.Count(), imageOutputSizes: imageCounter.Sizes(), trace: trace}, readErr
 		}
 		for _, item := range round.reasoningItems {
 			finalOutput = append(finalOutput, cloneJSONMap(item))
@@ -230,6 +251,7 @@ func (s *OpenAIGatewayService) foldCodexContinueStream(
 		reasoningTokens := codexContinueReasoningTokens(round.rawUsage)
 		n := codexContinueTierN(reasoningTokens)
 		roundsInfo = append(roundsInfo, map[string]any{"round": roundNo, "reasoning_tokens": reasoningTokens, "n": n})
+		trace.Rounds = append(trace.Rounds, CodexContinueTraceRound{Round: roundNo, ReasoningTokens: reasoningTokens, Tier: n})
 
 		hasEncrypted := false
 		if len(round.reasoningItems) > 0 {
@@ -261,15 +283,19 @@ func (s *OpenAIGatewayService) foldCodexContinueStream(
 
 			nextBody, buildErr := buildCodexContinueRoundBody(base, originalInput, replayTail)
 			if buildErr != nil {
+				trace.Status = "failed"
+				trace.Reason = "build_continuation_failed"
 				incompleteUsage := codexContinueAgentUsage(firstRawUsage, usageSum, round.rawUsage, false)
 				writeEvent(codexContinueSyntheticIncomplete(baseResponse, finalOutput, incompleteUsage, seq.Take(), "build_continuation_failed", roundsInfo, usageSum.Raw()))
-				return &codexContinueFoldResult{usage: totalUsage, firstTokenMs: firstTokenMs, responseID: firstVisibleResponseID, imageCount: imageCounter.Count(), imageOutputSizes: imageCounter.Sizes()}, nil
+				return &codexContinueFoldResult{usage: totalUsage, firstTokenMs: firstTokenMs, responseID: firstVisibleResponseID, imageCount: imageCounter.Count(), imageOutputSizes: imageCounter.Sizes(), trace: trace}, nil
 			}
 			nextReq, buildReqErr := s.buildUpstreamRequest(ctx, c, account, nextBody, token, true, promptCacheKey, isCodexCLI)
 			if buildReqErr != nil {
+				trace.Status = "failed"
+				trace.Reason = "build_continuation_failed"
 				incompleteUsage := codexContinueAgentUsage(firstRawUsage, usageSum, round.rawUsage, false)
 				writeEvent(codexContinueSyntheticIncomplete(baseResponse, finalOutput, incompleteUsage, seq.Take(), "build_continuation_failed", roundsInfo, usageSum.Raw()))
-				return &codexContinueFoldResult{usage: totalUsage, firstTokenMs: firstTokenMs, responseID: firstVisibleResponseID, imageCount: imageCounter.Count(), imageOutputSizes: imageCounter.Sizes()}, nil
+				return &codexContinueFoldResult{usage: totalUsage, firstTokenMs: firstTokenMs, responseID: firstVisibleResponseID, imageCount: imageCounter.Count(), imageOutputSizes: imageCounter.Sizes(), trace: trace}, nil
 			}
 			proxyURL := ""
 			if account.ProxyID != nil && account.Proxy != nil {
@@ -277,26 +303,32 @@ func (s *OpenAIGatewayService) foldCodexContinueStream(
 			}
 			nextResp, doErr := s.httpUpstream.Do(nextReq, proxyURL, account.ID, account.Concurrency)
 			if doErr != nil {
+				trace.Status = "failed"
+				trace.Reason = "upstream_error"
 				incompleteUsage := codexContinueAgentUsage(firstRawUsage, usageSum, round.rawUsage, false)
 				writeEvent(codexContinueSyntheticIncomplete(baseResponse, finalOutput, incompleteUsage, seq.Take(), "upstream_error", roundsInfo, usageSum.Raw()))
-				return &codexContinueFoldResult{usage: totalUsage, firstTokenMs: firstTokenMs, responseID: firstVisibleResponseID, imageCount: imageCounter.Count(), imageOutputSizes: imageCounter.Sizes()}, nil
+				return &codexContinueFoldResult{usage: totalUsage, firstTokenMs: firstTokenMs, responseID: firstVisibleResponseID, imageCount: imageCounter.Count(), imageOutputSizes: imageCounter.Sizes(), trace: trace}, nil
 			}
 			if nextResp.StatusCode >= 400 {
+				trace.Status = "failed"
+				trace.Reason = "upstream_error"
 				body, _ := io.ReadAll(io.LimitReader(nextResp.Body, openAIUpstreamErrorBodyReadLimitForConfig(s.cfg)))
 				_ = nextResp.Body.Close()
 				logger.LegacyPrintf("service.openai_gateway", "[OpenAI] Codex continuation failed account=%d status=%d body=%s", account.ID, nextResp.StatusCode, truncateString(string(body), 1024))
 				incompleteUsage := codexContinueAgentUsage(firstRawUsage, usageSum, round.rawUsage, false)
 				writeEvent(codexContinueSyntheticIncomplete(baseResponse, finalOutput, incompleteUsage, seq.Take(), "upstream_error", roundsInfo, usageSum.Raw()))
-				return &codexContinueFoldResult{usage: totalUsage, firstTokenMs: firstTokenMs, responseID: firstVisibleResponseID, imageCount: imageCounter.Count(), imageOutputSizes: imageCounter.Sizes()}, nil
+				return &codexContinueFoldResult{usage: totalUsage, firstTokenMs: firstTokenMs, responseID: firstVisibleResponseID, imageCount: imageCounter.Count(), imageOutputSizes: imageCounter.Sizes(), trace: trace}, nil
 			}
 			currentResp = nextResp
 			continue
 		}
 
 		if !round.sawTerminal {
+			trace.Status = "failed"
+			trace.Reason = "upstream_eof"
 			incompleteUsage := codexContinueAgentUsage(firstRawUsage, usageSum, round.rawUsage, false)
 			writeEvent(codexContinueSyntheticIncomplete(baseResponse, finalOutput, incompleteUsage, seq.Take(), "upstream_eof", roundsInfo, usageSum.Raw()))
-			return &codexContinueFoldResult{usage: totalUsage, firstTokenMs: firstTokenMs, responseID: firstVisibleResponseID, imageCount: imageCounter.Count(), imageOutputSizes: imageCounter.Sizes()}, nil
+			return &codexContinueFoldResult{usage: totalUsage, firstTokenMs: firstTokenMs, responseID: firstVisibleResponseID, imageCount: imageCounter.Count(), imageOutputSizes: imageCounter.Sizes(), trace: trace}, nil
 		}
 
 		for _, entry := range round.bufferedEvents {
@@ -315,20 +347,28 @@ func (s *OpenAIGatewayService) foldCodexContinueStream(
 			finalOutput = append(finalOutput, cloneJSONMap(entry.item))
 		}
 		finalRawUsage = round.rawUsage
+		if roundNo > 1 {
+			trace.Status = "continued"
+		} else {
+			trace.Status = "not_needed"
+		}
+		trace.Reason = stopReason
 		agentUsage := codexContinueAgentUsage(firstRawUsage, usageSum, finalRawUsage, true)
 		writeEvent(codexContinueTerminal(round.terminal, baseResponse, finalOutput, agentUsage, seq.Take(), roundsInfo, stopReason, usageSum.Raw()))
 		if round.sawDone {
 			writeDone()
 		}
 		if terminalType, _ := round.terminal["type"].(string); terminalType == "response.failed" {
+			trace.Status = "failed"
+			trace.Reason = "upstream_response_failed"
 			msg := extractOpenAISSEErrorMessage(mustMarshalJSON(round.terminal))
 			if msg == "" {
 				msg = "upstream response failed"
 			}
-			return &codexContinueFoldResult{usage: totalUsage, firstTokenMs: firstTokenMs, responseID: firstVisibleResponseID, imageCount: imageCounter.Count(), imageOutputSizes: imageCounter.Sizes()}, fmt.Errorf("upstream response failed: %s", msg)
+			return &codexContinueFoldResult{usage: totalUsage, firstTokenMs: firstTokenMs, responseID: firstVisibleResponseID, imageCount: imageCounter.Count(), imageOutputSizes: imageCounter.Sizes(), trace: trace}, fmt.Errorf("upstream response failed: %s", msg)
 		}
 		logger.LegacyPrintf("service.openai_gateway", "[OpenAI] Codex continuation completed account=%d response_id=%s rounds=%d usage_in=%d usage_out=%d", account.ID, firstVisibleResponseID, roundNo, totalUsage.InputTokens, totalUsage.OutputTokens)
-		return &codexContinueFoldResult{usage: totalUsage, firstTokenMs: firstTokenMs, responseID: firstVisibleResponseID, imageCount: imageCounter.Count(), imageOutputSizes: imageCounter.Sizes()}, nil
+		return &codexContinueFoldResult{usage: totalUsage, firstTokenMs: firstTokenMs, responseID: firstVisibleResponseID, imageCount: imageCounter.Count(), imageOutputSizes: imageCounter.Sizes(), trace: trace}, nil
 	}
 }
 

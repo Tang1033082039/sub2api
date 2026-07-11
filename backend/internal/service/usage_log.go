@@ -179,8 +179,7 @@ type UsageLog struct {
 	VideoCount           int
 	VideoResolution      *string
 	VideoDurationSeconds *int
-
-	CreatedAt time.Time
+	CreatedAt            time.Time
 
 	User         *User
 	APIKey       *APIKey

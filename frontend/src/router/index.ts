@@ -588,6 +588,12 @@ const routes: RouteRecordRaw[] = [
     }
   },
   {
+    path: '/admin/codex-continuations',
+    name: 'AdminCodexContinuations',
+    component: () => import('@/views/admin/CodexContinuationsView.vue'),
+    meta: { requiresAuth: true, requiresAdmin: true, title: 'Codex 续写日志' }
+  },
+  {
     path: '/admin/affiliates',
     redirect: '/admin/affiliates/invites'
   },

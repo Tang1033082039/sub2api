@@ -57,6 +57,7 @@ type UsageStats struct {
 // UsageService 使用统计服务
 type UsageService struct {
 	usageRepo            UsageLogRepository
+	codexContinueLogRepo CodexContinueLogRepository
 	userRepo             UserRepository
 	entClient            *dbent.Client
 	authCacheInvalidator APIKeyAuthCacheInvalidator
@@ -64,12 +65,21 @@ type UsageService struct {
 
 // NewUsageService 创建使用统计服务实例
 func NewUsageService(usageRepo UsageLogRepository, userRepo UserRepository, entClient *dbent.Client, authCacheInvalidator APIKeyAuthCacheInvalidator) *UsageService {
+	codexContinueLogRepo, _ := usageRepo.(CodexContinueLogRepository)
 	return &UsageService{
 		usageRepo:            usageRepo,
+		codexContinueLogRepo: codexContinueLogRepo,
 		userRepo:             userRepo,
 		entClient:            entClient,
 		authCacheInvalidator: authCacheInvalidator,
 	}
+}
+
+func (s *UsageService) ListCodexContinueLogs(ctx context.Context, params pagination.PaginationParams, filters CodexContinueLogFilters) ([]CodexContinueLog, *pagination.PaginationResult, error) {
+	if s.codexContinueLogRepo == nil {
+		return []CodexContinueLog{}, &pagination.PaginationResult{Page: params.Page, PageSize: params.PageSize}, nil
+	}
+	return s.codexContinueLogRepo.ListCodexContinueLogs(ctx, params, filters)
 }
 
 // Create 创建使用日志

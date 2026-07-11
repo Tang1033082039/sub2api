@@ -92,6 +92,37 @@ export interface AdminUsageQueryParams extends UsageQueryParams {
   status_code?: number | null
 }
 
+export interface CodexContinueRound {
+  round: number
+  reasoning_tokens: number
+  tier: number
+}
+
+export interface CodexContinuationLog {
+  id: number
+  request_id: string
+  user_id: number
+  api_key_id: number
+  account_id: number
+  model: string
+  status: 'continued' | 'not_needed' | 'failed'
+  reason: string
+  rounds: CodexContinueRound[]
+  created_at: string
+}
+
+export interface CodexContinuationQueryParams {
+  page?: number
+  page_size?: number
+  status?: CodexContinuationLog['status']
+  request_id?: string
+  user_id?: number
+  account_id?: number
+  start_date?: string
+  end_date?: string
+  timezone?: string
+}
+
 // ==================== API Functions ====================
 
 /**
@@ -104,6 +135,17 @@ export async function list(
   options?: { signal?: AbortSignal }
 ): Promise<PaginatedResponse<AdminUsageLog>> {
   const { data } = await apiClient.get<PaginatedResponse<AdminUsageLog>>('/admin/usage', {
+    params,
+    signal: options?.signal
+  })
+  return data
+}
+
+export async function listCodexContinuations(
+  params: CodexContinuationQueryParams,
+  options?: { signal?: AbortSignal }
+): Promise<PaginatedResponse<CodexContinuationLog>> {
+  const { data } = await apiClient.get<PaginatedResponse<CodexContinuationLog>>('/admin/usage/codex-continuations', {
     params,
     signal: options?.signal
   })
@@ -206,6 +248,7 @@ export async function cancelCleanupTask(taskId: number): Promise<{ id: number; s
 
 export const adminUsageAPI = {
   list,
+  listCodexContinuations,
   getStats,
   searchUsers,
   searchApiKeys,

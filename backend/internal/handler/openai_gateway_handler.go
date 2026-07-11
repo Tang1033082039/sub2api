@@ -437,6 +437,17 @@ func (h *OpenAIGatewayHandler) Responses(c *gin.Context) {
 			service.SetOpsLatencyMs(c, service.OpsTimeToFirstTokenMsKey, int64(*result.FirstTokenMs))
 		}
 		if err != nil {
+			if result != nil && result.CodexContinueTrace != nil {
+				auditRequestID := result.RequestID
+				if auditRequestID == "" {
+					auditRequestID = c.Writer.Header().Get("X-Request-Id")
+				}
+				h.submitUsageRecordTask(c.Request.Context(), func(ctx context.Context) {
+					if auditErr := h.gatewayService.RecordCodexContinueAudit(ctx, auditRequestID, result, apiKey, apiKey.User, account); auditErr != nil {
+						logger.L().With(zap.String("component", "handler.openai_gateway.responses"), zap.String("request_id", auditRequestID), zap.Error(auditErr)).Error("openai.codex_continue_audit_record_failed")
+					}
+				})
+			}
 			if result != nil && result.ImageCount > 0 {
 				reqLog.Warn("openai.forward_partial_error_with_image_result",
 					zap.Int64("account_id", account.ID),

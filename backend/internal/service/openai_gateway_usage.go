@@ -18,6 +18,29 @@ import (
 	"go.uber.org/zap"
 )
 
+// RecordCodexContinueAudit persists continuation diagnostics independently from
+// billing and ordinary usage-log writes.
+func (s *OpenAIGatewayService) RecordCodexContinueAudit(ctx context.Context, requestID string, result *OpenAIForwardResult, apiKey *APIKey, user *User, account *Account) error {
+	if s == nil || result == nil || result.CodexContinueTrace == nil || apiKey == nil || user == nil || account == nil {
+		return nil
+	}
+	requestID = resolveUsageBillingRequestID(ctx, requestID)
+	repo, ok := s.usageLogRepo.(CodexContinueLogRepository)
+	if !ok {
+		return nil
+	}
+	return repo.CreateCodexContinueLog(ctx, &CodexContinueLog{
+		RequestID: requestID,
+		UserID:    user.ID,
+		APIKeyID:  apiKey.ID,
+		AccountID: account.ID,
+		Model:     result.Model,
+		Status:    result.CodexContinueTrace.Status,
+		Reason:    result.CodexContinueTrace.Reason,
+		Rounds:    result.CodexContinueTrace.Rounds,
+	})
+}
+
 // OpenAIRecordUsageInput input for recording usage
 type OpenAIRecordUsageInput struct {
 	Result             *OpenAIForwardResult
@@ -307,6 +330,11 @@ func (s *OpenAIGatewayService) RecordUsage(ctx context.Context, input *OpenAIRec
 	}
 	if subscription != nil {
 		usageLog.SubscriptionID = &subscription.ID
+	}
+	if result.CodexContinueTrace != nil {
+		if err := s.RecordCodexContinueAudit(ctx, requestID, result, apiKey, user, account); err != nil {
+			logger.LegacyPrintf("service.openai_gateway", "codex continuation audit log failed request_id=%s err=%v", requestID, err)
+		}
 	}
 
 	// 计算账号统计定价费用（使用最终上游模型匹配自定义规则）

@@ -786,6 +786,7 @@ func (s *OpenAIGatewayService) Forward(ctx context.Context, c *gin.Context, acco
 		responseID := ""
 		imageCount := 0
 		var imageOutputSizes []string
+		var codexContinueTrace *CodexContinueTrace
 		if reqStream {
 			var streamResult *openaiStreamingResult
 			var err error
@@ -794,14 +795,36 @@ func (s *OpenAIGatewayService) Forward(ctx context.Context, c *gin.Context, acco
 			} else {
 				streamResult, err = s.handleStreamingResponse(ctx, resp, c, account, startTime, originalModel, upstreamModel)
 			}
+			if streamResult != nil {
+				usage = streamResult.usage
+				firstTokenMs = streamResult.firstTokenMs
+				responseID = strings.TrimSpace(streamResult.responseID)
+				imageCount = streamResult.imageCount
+				imageOutputSizes = streamResult.imageOutputSizes
+				codexContinueTrace = streamResult.codexContinueTrace
+			}
 			if err != nil {
+				if codexContinueTrace != nil {
+					if usage == nil {
+						usage = &OpenAIUsage{}
+					}
+					return &OpenAIForwardResult{
+						RequestID:          resp.Header.Get("x-request-id"),
+						ResponseID:         responseID,
+						Usage:              *usage,
+						Model:              originalModel,
+						BillingModel:       billingModel,
+						UpstreamModel:      upstreamModel,
+						ServiceTier:        serviceTier,
+						ReasoningEffort:    reasoningEffort,
+						Stream:             reqStream,
+						Duration:           time.Since(startTime),
+						FirstTokenMs:       firstTokenMs,
+						CodexContinueTrace: codexContinueTrace,
+					}, err
+				}
 				return nil, err
 			}
-			usage = streamResult.usage
-			firstTokenMs = streamResult.firstTokenMs
-			responseID = strings.TrimSpace(streamResult.responseID)
-			imageCount = streamResult.imageCount
-			imageOutputSizes = streamResult.imageOutputSizes
 		} else {
 			nonStreamResult, err := s.handleNonStreamingResponse(ctx, resp, c, account, originalModel, upstreamModel)
 			if err != nil {
@@ -827,18 +850,19 @@ func (s *OpenAIGatewayService) Forward(ctx context.Context, c *gin.Context, acco
 		}
 
 		forwardResult := &OpenAIForwardResult{
-			RequestID:       resp.Header.Get("x-request-id"),
-			ResponseID:      responseID,
-			Usage:           *usage,
-			Model:           originalModel,
-			BillingModel:    billingModel,
-			UpstreamModel:   upstreamModel,
-			ServiceTier:     serviceTier,
-			ReasoningEffort: reasoningEffort,
-			Stream:          reqStream,
-			OpenAIWSMode:    false,
-			Duration:        time.Since(startTime),
-			FirstTokenMs:    firstTokenMs,
+			RequestID:          resp.Header.Get("x-request-id"),
+			ResponseID:         responseID,
+			Usage:              *usage,
+			Model:              originalModel,
+			BillingModel:       billingModel,
+			UpstreamModel:      upstreamModel,
+			ServiceTier:        serviceTier,
+			ReasoningEffort:    reasoningEffort,
+			Stream:             reqStream,
+			OpenAIWSMode:       false,
+			Duration:           time.Since(startTime),
+			FirstTokenMs:       firstTokenMs,
+			CodexContinueTrace: codexContinueTrace,
 		}
 		if imageCount > 0 {
 			forwardResult.ImageCount = imageCount

@@ -57,6 +57,52 @@ type CreateUsageCleanupTaskRequest struct {
 	Timezone    string  `json:"timezone"`
 }
 
+// ListCodexContinuations lists Codex continuation audit records.
+func (h *UsageHandler) ListCodexContinuations(c *gin.Context) {
+	page, pageSize := response.ParsePagination(c)
+	filters := service.CodexContinueLogFilters{
+		Status: strings.TrimSpace(c.Query("status")), RequestID: strings.TrimSpace(c.Query("request_id")),
+	}
+	if filters.Status != "" && filters.Status != "continued" && filters.Status != "not_needed" && filters.Status != "failed" {
+		response.BadRequest(c, "Invalid status")
+		return
+	}
+	for key, target := range map[string]*int64{"user_id": &filters.UserID, "account_id": &filters.AccountID} {
+		if raw := strings.TrimSpace(c.Query(key)); raw != "" {
+			value, err := strconv.ParseInt(raw, 10, 64)
+			if err != nil || value <= 0 {
+				response.BadRequest(c, "Invalid "+key)
+				return
+			}
+			*target = value
+		}
+	}
+	userTZ := c.Query("timezone")
+	if raw := strings.TrimSpace(c.Query("start_date")); raw != "" {
+		parsed, err := timezone.ParseInUserLocation("2006-01-02", raw, userTZ)
+		if err != nil {
+			response.BadRequest(c, "Invalid start_date format, use YYYY-MM-DD")
+			return
+		}
+		filters.StartTime = &parsed
+	}
+	if raw := strings.TrimSpace(c.Query("end_date")); raw != "" {
+		parsed, err := timezone.ParseInUserLocation("2006-01-02", raw, userTZ)
+		if err != nil {
+			response.BadRequest(c, "Invalid end_date format, use YYYY-MM-DD")
+			return
+		}
+		parsed = parsed.AddDate(0, 0, 1)
+		filters.EndTime = &parsed
+	}
+	items, result, err := h.usageService.ListCodexContinueLogs(c.Request.Context(), pagination.PaginationParams{Page: page, PageSize: pageSize}, filters)
+	if err != nil {
+		response.ErrorFrom(c, err)
+		return
+	}
+	response.Paginated(c, items, result.Total, page, pageSize)
+}
+
 // List handles listing all usage records with filters
 // GET /api/v1/admin/usage
 func (h *UsageHandler) List(c *gin.Context) {
