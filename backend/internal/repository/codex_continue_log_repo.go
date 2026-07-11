@@ -60,7 +60,19 @@ func (r *usageLogRepository) ListCodexContinueLogs(ctx context.Context, params p
 		where = " WHERE " + strings.Join(conditions, " AND ")
 	}
 	var total int64
-	if err := r.sql.QueryRowContext(ctx, "SELECT COUNT(*) FROM codex_continue_logs l"+where, args...).Scan(&total); err != nil {
+	countRows, err := r.sql.QueryContext(ctx, "SELECT COUNT(*) FROM codex_continue_logs l"+where, args...)
+	if err != nil {
+		return nil, nil, err
+	}
+	if !countRows.Next() {
+		_ = countRows.Close()
+		return nil, nil, fmt.Errorf("count Codex continuation logs returned no rows")
+	}
+	if err := countRows.Scan(&total); err != nil {
+		_ = countRows.Close()
+		return nil, nil, err
+	}
+	if err := countRows.Close(); err != nil {
 		return nil, nil, err
 	}
 	queryArgs := append(append([]any{}, args...), pageSize, (page-1)*pageSize)
