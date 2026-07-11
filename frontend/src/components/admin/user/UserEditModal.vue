@@ -63,6 +63,23 @@
           <span class="mt-1 block text-xs text-gray-500 dark:text-dark-400">{{ t('admin.users.form.codexContinueHint') }}</span>
         </span>
       </label>
+      <div v-if="form.codex_continue_enabled" class="grid grid-cols-1 gap-4 rounded-md border border-gray-200 p-3 dark:border-dark-700 sm:grid-cols-3">
+        <div>
+          <label class="input-label">{{ t('admin.users.form.codexContinueMaxContinue') }}</label>
+          <input v-model.number="form.codex_continue_max_continue" type="number" min="0" step="1" class="input" :placeholder="t('admin.users.form.codexContinueMaxContinuePlaceholder')" />
+          <p class="input-hint">{{ t('admin.users.form.codexContinueMaxContinueHint') }}</p>
+        </div>
+        <div>
+          <label class="input-label">{{ t('admin.users.form.codexContinueRetryMax') }}</label>
+          <input v-model.number="form.codex_continue_retry_max" type="number" min="0" step="1" class="input" :placeholder="t('admin.users.form.codexContinueRetryMaxPlaceholder')" />
+          <p class="input-hint">{{ t('admin.users.form.codexContinueRetryMaxHint') }}</p>
+        </div>
+        <div>
+          <label class="input-label">{{ t('admin.users.form.codexContinueLowReasoningFloor') }}</label>
+          <input v-model.number="form.codex_continue_low_reasoning_floor" type="number" min="0" step="1" class="input" :placeholder="t('admin.users.form.codexContinueLowReasoningFloorPlaceholder')" />
+          <p class="input-hint">{{ t('admin.users.form.codexContinueLowReasoningFloorHint') }}</p>
+        </div>
+      </div>
       <UserAttributeForm v-model="form.customAttributes" :user-id="user?.id" />
     </form>
     <template #footer>
@@ -92,11 +109,11 @@ const emit = defineEmits(['close', 'success'])
 const { t } = useI18n(); const appStore = useAppStore(); const { copyToClipboard } = useClipboard()
 
 const submitting = ref(false); const passwordCopied = ref(false)
-const form = reactive({ email: '', password: '', username: '', notes: '', role: 'user', concurrency: 1, rpm_limit: 0, codex_continue_enabled: false, customAttributes: {} as UserAttributeValuesMap })
+const form = reactive({ email: '', password: '', username: '', notes: '', role: 'user', concurrency: 1, rpm_limit: 0, codex_continue_enabled: false, codex_continue_max_continue: 0, codex_continue_retry_max: 2, codex_continue_low_reasoning_floor: 150, customAttributes: {} as UserAttributeValuesMap })
 
 watch(() => props.user, (u) => {
   if (u) {
-    Object.assign(form, { email: u.email, password: '', username: u.username || '', notes: u.notes || '', role: u.role || 'user', concurrency: u.concurrency, rpm_limit: u.rpm_limit ?? 0, codex_continue_enabled: !!u.codex_continue_enabled, customAttributes: {} })
+    Object.assign(form, { email: u.email, password: '', username: u.username || '', notes: u.notes || '', role: u.role || 'user', concurrency: u.concurrency, rpm_limit: u.rpm_limit ?? 0, codex_continue_enabled: !!u.codex_continue_enabled, codex_continue_max_continue: u.codex_continue_max_continue ?? 0, codex_continue_retry_max: u.codex_continue_retry_max ?? 2, codex_continue_low_reasoning_floor: u.codex_continue_low_reasoning_floor ?? 150, customAttributes: {} })
     passwordCopied.value = false
   }
 }, { immediate: true })
@@ -123,7 +140,7 @@ const handleUpdateUser = async () => {
   }
   submitting.value = true
   try {
-    const data: any = { email: form.email, username: form.username, notes: form.notes, role: form.role, concurrency: form.concurrency, rpm_limit: form.rpm_limit, codex_continue_enabled: form.codex_continue_enabled }
+    const data: any = { email: form.email, username: form.username, notes: form.notes, role: form.role, concurrency: form.concurrency, rpm_limit: form.rpm_limit, codex_continue_enabled: form.codex_continue_enabled, codex_continue_max_continue: form.codex_continue_max_continue, codex_continue_retry_max: form.codex_continue_retry_max, codex_continue_low_reasoning_floor: form.codex_continue_low_reasoning_floor }
     if (form.password.trim()) data.password = form.password.trim()
     await adminAPI.users.update(props.user.id, data)
     if (Object.keys(form.customAttributes).length > 0) await adminAPI.userAttributes.updateUserAttributeValues(props.user.id, form.customAttributes)

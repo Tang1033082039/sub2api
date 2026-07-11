@@ -2115,6 +2115,18 @@ func init() {
 	userDescCodexContinueEnabled := userFields[21].Descriptor()
 	// user.DefaultCodexContinueEnabled holds the default value on creation for the codex_continue_enabled field.
 	user.DefaultCodexContinueEnabled = userDescCodexContinueEnabled.Default.(bool)
+	// userDescCodexContinueMaxContinue is the schema descriptor for codex_continue_max_continue field.
+	userDescCodexContinueMaxContinue := userFields[22].Descriptor()
+	// user.DefaultCodexContinueMaxContinue holds the default value on creation for the codex_continue_max_continue field.
+	user.DefaultCodexContinueMaxContinue = userDescCodexContinueMaxContinue.Default.(int)
+	// userDescCodexContinueRetryMax is the schema descriptor for codex_continue_retry_max field.
+	userDescCodexContinueRetryMax := userFields[23].Descriptor()
+	// user.DefaultCodexContinueRetryMax holds the default value on creation for the codex_continue_retry_max field.
+	user.DefaultCodexContinueRetryMax = userDescCodexContinueRetryMax.Default.(int)
+	// userDescCodexContinueLowReasoningFloor is the schema descriptor for codex_continue_low_reasoning_floor field.
+	userDescCodexContinueLowReasoningFloor := userFields[24].Descriptor()
+	// user.DefaultCodexContinueLowReasoningFloor holds the default value on creation for the codex_continue_low_reasoning_floor field.
+	user.DefaultCodexContinueLowReasoningFloor = userDescCodexContinueLowReasoningFloor.Default.(int)
 	userallowedgroupFields := schema.UserAllowedGroup{}.Fields()
 	_ = userallowedgroupFields
 	// userallowedgroupDescCreatedAt is the schema descriptor for created_at field.

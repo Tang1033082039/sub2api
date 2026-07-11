@@ -131,7 +131,12 @@ type CreateUserInput struct {
 	Concurrency          int
 	RPMLimit             int
 	CodexContinueEnabled bool
-	AllowedGroups        []int64
+	// 三者为 nil 时使用 codexContinueDefault* 常量（0/2/150），而非 Go 零值，
+	// 以避免管理员创建用户时不设置这三项就变成"轮数/重试不限、无下限"。
+	CodexContinueMaxContinue       *int
+	CodexContinueRetryMax          *int
+	CodexContinueLowReasoningFloor *int
+	AllowedGroups                  []int64
 	// ActorAdminID 执行本次操作的管理员ID(来自JWT)，仅用于权限敏感操作的审计日志。
 	ActorAdminID int64
 }
@@ -146,8 +151,12 @@ type UpdateUserInput struct {
 	Concurrency          *int     // 使用指针区分"未提供"和"设置为0"
 	RPMLimit             *int     // 使用指针区分"未提供"和"设置为0"
 	CodexContinueEnabled *bool
-	Status               string
-	AllowedGroups        *[]int64 // 使用指针区分"未提供"和"设置为空数组"
+	// 使用指针区分"未提供"和"设置为0"；0 对 MaxContinue/RetryMax 表示不限制，对 LowReasoningFloor 表示不设下限。
+	CodexContinueMaxContinue       *int
+	CodexContinueRetryMax          *int
+	CodexContinueLowReasoningFloor *int
+	Status                         string
+	AllowedGroups                  *[]int64 // 使用指针区分"未提供"和"设置为空数组"
 	// GroupRates 用户专属分组倍率配置
 	// map[groupID]*rate，nil 表示删除该分组的专属倍率
 	GroupRates map[int64]*float64

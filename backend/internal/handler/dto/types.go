@@ -34,6 +34,12 @@ type User struct {
 	RPMLimit int `json:"rpm_limit"`
 
 	CodexContinueEnabled bool `json:"codex_continue_enabled"`
+	// CodexContinueMaxContinue 截断续写轮数上限（0 = 不限制）。
+	CodexContinueMaxContinue int `json:"codex_continue_max_continue"`
+	// CodexContinueRetryMax 首轮低推理重试次数上限（0 = 不限制）。
+	CodexContinueRetryMax int `json:"codex_continue_retry_max"`
+	// CodexContinueLowReasoningFloor 首轮低推理重试下限阈值（0 = 不设下限）。
+	CodexContinueLowReasoningFloor int `json:"codex_continue_low_reasoning_floor"`
 
 	APIKeys       []APIKey           `json:"api_keys,omitempty"`
 	Subscriptions []UserSubscription `json:"subscriptions,omitempty"`

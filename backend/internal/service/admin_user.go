@@ -143,6 +143,21 @@ func (s *adminServiceImpl) CreateUser(ctx context.Context, input *CreateUserInpu
 		Status:               StatusActive,
 		AllowedGroups:        input.AllowedGroups,
 	}
+	if input.CodexContinueMaxContinue != nil {
+		user.CodexContinueMaxContinue = *input.CodexContinueMaxContinue
+	} else {
+		user.CodexContinueMaxContinue = codexContinueDefaultMaxContinue
+	}
+	if input.CodexContinueRetryMax != nil {
+		user.CodexContinueRetryMax = *input.CodexContinueRetryMax
+	} else {
+		user.CodexContinueRetryMax = codexContinueDefaultRetryMax
+	}
+	if input.CodexContinueLowReasoningFloor != nil {
+		user.CodexContinueLowReasoningFloor = *input.CodexContinueLowReasoningFloor
+	} else {
+		user.CodexContinueLowReasoningFloor = codexContinueDefaultLowReasoningFloor
+	}
 	if err := user.SetPassword(input.Password); err != nil {
 		return nil, err
 	}
@@ -218,6 +233,9 @@ func (s *adminServiceImpl) UpdateUser(ctx context.Context, id int64, input *Upda
 	oldRole := user.Role
 	oldRPMLimit := user.RPMLimit
 	oldCodexContinueEnabled := user.CodexContinueEnabled
+	oldCodexContinueMaxContinue := user.CodexContinueMaxContinue
+	oldCodexContinueRetryMax := user.CodexContinueRetryMax
+	oldCodexContinueLowReasoningFloor := user.CodexContinueLowReasoningFloor
 	oldAllowedGroups := append([]int64(nil), user.AllowedGroups...)
 
 	if input.Email != "" {
@@ -268,6 +286,16 @@ func (s *adminServiceImpl) UpdateUser(ctx context.Context, id int64, input *Upda
 		user.CodexContinueEnabled = *input.CodexContinueEnabled
 	}
 
+	if input.CodexContinueMaxContinue != nil {
+		user.CodexContinueMaxContinue = *input.CodexContinueMaxContinue
+	}
+	if input.CodexContinueRetryMax != nil {
+		user.CodexContinueRetryMax = *input.CodexContinueRetryMax
+	}
+	if input.CodexContinueLowReasoningFloor != nil {
+		user.CodexContinueLowReasoningFloor = *input.CodexContinueLowReasoningFloor
+	}
+
 	if input.AllowedGroups != nil {
 		user.AllowedGroups = *input.AllowedGroups
 	}
@@ -292,7 +320,7 @@ func (s *adminServiceImpl) UpdateUser(ctx context.Context, id int64, input *Upda
 	if s.authCacheInvalidator != nil {
 		// RPMLimit 直接参与 billing_cache_service.checkRPM 的三级级联，
 		// allowed_groups 参与 API Key 专属分组授权判断；不失效缓存会让修改在一个 L2 TTL 内失去效果。
-		if user.Concurrency != oldConcurrency || user.Status != oldStatus || user.Role != oldRole || user.RPMLimit != oldRPMLimit || user.CodexContinueEnabled != oldCodexContinueEnabled || !sameInt64Set(user.AllowedGroups, oldAllowedGroups) {
+		if user.Concurrency != oldConcurrency || user.Status != oldStatus || user.Role != oldRole || user.RPMLimit != oldRPMLimit || user.CodexContinueEnabled != oldCodexContinueEnabled || user.CodexContinueMaxContinue != oldCodexContinueMaxContinue || user.CodexContinueRetryMax != oldCodexContinueRetryMax || user.CodexContinueLowReasoningFloor != oldCodexContinueLowReasoningFloor || !sameInt64Set(user.AllowedGroups, oldAllowedGroups) {
 			s.authCacheInvalidator.InvalidateAuthCacheByUserID(ctx, user.ID)
 		}
 	}

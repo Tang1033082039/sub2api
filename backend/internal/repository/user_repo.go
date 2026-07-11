@@ -98,6 +98,9 @@ func (r *userRepository) Create(ctx context.Context, userIn *service.User) error
 		SetNillableLastActiveAt(userIn.LastActiveAt).
 		SetRpmLimit(userIn.RPMLimit).
 		SetCodexContinueEnabled(userIn.CodexContinueEnabled).
+		SetCodexContinueMaxContinue(userIn.CodexContinueMaxContinue).
+		SetCodexContinueRetryMax(userIn.CodexContinueRetryMax).
+		SetCodexContinueLowReasoningFloor(userIn.CodexContinueLowReasoningFloor).
 		Save(txCtx)
 	if err != nil {
 		return translatePersistenceError(err, nil, service.ErrEmailExists)
@@ -243,7 +246,10 @@ func (r *userRepository) Update(ctx context.Context, userIn *service.User) error
 		SetBalanceNotifyExtraEmails(marshalExtraEmails(userIn.BalanceNotifyExtraEmails)).
 		SetTotalRecharged(userIn.TotalRecharged).
 		SetRpmLimit(userIn.RPMLimit).
-		SetCodexContinueEnabled(userIn.CodexContinueEnabled)
+		SetCodexContinueEnabled(userIn.CodexContinueEnabled).
+		SetCodexContinueMaxContinue(userIn.CodexContinueMaxContinue).
+		SetCodexContinueRetryMax(userIn.CodexContinueRetryMax).
+		SetCodexContinueLowReasoningFloor(userIn.CodexContinueLowReasoningFloor)
 	if userIn.SignupSource != "" {
 		updateOp = updateOp.SetSignupSource(userIn.SignupSource)
 	}

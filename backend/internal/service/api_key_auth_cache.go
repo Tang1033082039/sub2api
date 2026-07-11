@@ -51,6 +51,12 @@ type APIKeyAuthUserSnapshot struct {
 
 	// CodexContinueEnabled 控制该用户是否启用 Codex 连续推理续写灰度功能。
 	CodexContinueEnabled bool `json:"codex_continue_enabled"`
+	// CodexContinueMaxContinue 截断续写轮数上限（0 = 不限制）。
+	CodexContinueMaxContinue int `json:"codex_continue_max_continue"`
+	// CodexContinueRetryMax 首轮低推理重试次数上限（0 = 不限制）。
+	CodexContinueRetryMax int `json:"codex_continue_retry_max"`
+	// CodexContinueLowReasoningFloor 首轮低推理重试下限阈值（0 = 不设下限）。
+	CodexContinueLowReasoningFloor int `json:"codex_continue_low_reasoning_floor"`
 
 	// UserGroupRPMOverride 该 API Key 对应的 (user, group) 专属 RPM 覆盖值。
 	// nil = 无 override（回退到 group/user 级）；0 = 不限流；>0 = 专属上限。

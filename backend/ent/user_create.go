@@ -368,6 +368,48 @@ func (_c *UserCreate) SetNillableCodexContinueEnabled(v *bool) *UserCreate {
 	return _c
 }
 
+// SetCodexContinueMaxContinue sets the "codex_continue_max_continue" field.
+func (_c *UserCreate) SetCodexContinueMaxContinue(v int) *UserCreate {
+	_c.mutation.SetCodexContinueMaxContinue(v)
+	return _c
+}
+
+// SetNillableCodexContinueMaxContinue sets the "codex_continue_max_continue" field if the given value is not nil.
+func (_c *UserCreate) SetNillableCodexContinueMaxContinue(v *int) *UserCreate {
+	if v != nil {
+		_c.SetCodexContinueMaxContinue(*v)
+	}
+	return _c
+}
+
+// SetCodexContinueRetryMax sets the "codex_continue_retry_max" field.
+func (_c *UserCreate) SetCodexContinueRetryMax(v int) *UserCreate {
+	_c.mutation.SetCodexContinueRetryMax(v)
+	return _c
+}
+
+// SetNillableCodexContinueRetryMax sets the "codex_continue_retry_max" field if the given value is not nil.
+func (_c *UserCreate) SetNillableCodexContinueRetryMax(v *int) *UserCreate {
+	if v != nil {
+		_c.SetCodexContinueRetryMax(*v)
+	}
+	return _c
+}
+
+// SetCodexContinueLowReasoningFloor sets the "codex_continue_low_reasoning_floor" field.
+func (_c *UserCreate) SetCodexContinueLowReasoningFloor(v int) *UserCreate {
+	_c.mutation.SetCodexContinueLowReasoningFloor(v)
+	return _c
+}
+
+// SetNillableCodexContinueLowReasoningFloor sets the "codex_continue_low_reasoning_floor" field if the given value is not nil.
+func (_c *UserCreate) SetNillableCodexContinueLowReasoningFloor(v *int) *UserCreate {
+	if v != nil {
+		_c.SetCodexContinueLowReasoningFloor(*v)
+	}
+	return _c
+}
+
 // AddAPIKeyIDs adds the "api_keys" edge to the APIKey entity by IDs.
 func (_c *UserCreate) AddAPIKeyIDs(ids ...int64) *UserCreate {
 	_c.mutation.AddAPIKeyIDs(ids...)
@@ -674,6 +716,18 @@ func (_c *UserCreate) defaults() error {
 		v := user.DefaultCodexContinueEnabled
 		_c.mutation.SetCodexContinueEnabled(v)
 	}
+	if _, ok := _c.mutation.CodexContinueMaxContinue(); !ok {
+		v := user.DefaultCodexContinueMaxContinue
+		_c.mutation.SetCodexContinueMaxContinue(v)
+	}
+	if _, ok := _c.mutation.CodexContinueRetryMax(); !ok {
+		v := user.DefaultCodexContinueRetryMax
+		_c.mutation.SetCodexContinueRetryMax(v)
+	}
+	if _, ok := _c.mutation.CodexContinueLowReasoningFloor(); !ok {
+		v := user.DefaultCodexContinueLowReasoningFloor
+		_c.mutation.SetCodexContinueLowReasoningFloor(v)
+	}
 	return nil
 }
 
@@ -765,6 +819,15 @@ func (_c *UserCreate) check() error {
 	}
 	if _, ok := _c.mutation.CodexContinueEnabled(); !ok {
 		return &ValidationError{Name: "codex_continue_enabled", err: errors.New(`ent: missing required field "User.codex_continue_enabled"`)}
+	}
+	if _, ok := _c.mutation.CodexContinueMaxContinue(); !ok {
+		return &ValidationError{Name: "codex_continue_max_continue", err: errors.New(`ent: missing required field "User.codex_continue_max_continue"`)}
+	}
+	if _, ok := _c.mutation.CodexContinueRetryMax(); !ok {
+		return &ValidationError{Name: "codex_continue_retry_max", err: errors.New(`ent: missing required field "User.codex_continue_retry_max"`)}
+	}
+	if _, ok := _c.mutation.CodexContinueLowReasoningFloor(); !ok {
+		return &ValidationError{Name: "codex_continue_low_reasoning_floor", err: errors.New(`ent: missing required field "User.codex_continue_low_reasoning_floor"`)}
 	}
 	return nil
 }
@@ -892,6 +955,18 @@ func (_c *UserCreate) createSpec() (*User, *sqlgraph.CreateSpec) {
 	if value, ok := _c.mutation.CodexContinueEnabled(); ok {
 		_spec.SetField(user.FieldCodexContinueEnabled, field.TypeBool, value)
 		_node.CodexContinueEnabled = value
+	}
+	if value, ok := _c.mutation.CodexContinueMaxContinue(); ok {
+		_spec.SetField(user.FieldCodexContinueMaxContinue, field.TypeInt, value)
+		_node.CodexContinueMaxContinue = value
+	}
+	if value, ok := _c.mutation.CodexContinueRetryMax(); ok {
+		_spec.SetField(user.FieldCodexContinueRetryMax, field.TypeInt, value)
+		_node.CodexContinueRetryMax = value
+	}
+	if value, ok := _c.mutation.CodexContinueLowReasoningFloor(); ok {
+		_spec.SetField(user.FieldCodexContinueLowReasoningFloor, field.TypeInt, value)
+		_node.CodexContinueLowReasoningFloor = value
 	}
 	if nodes := _c.mutation.APIKeysIDs(); len(nodes) > 0 {
 		edge := &sqlgraph.EdgeSpec{
@@ -1517,6 +1592,60 @@ func (u *UserUpsert) UpdateCodexContinueEnabled() *UserUpsert {
 	return u
 }
 
+// SetCodexContinueMaxContinue sets the "codex_continue_max_continue" field.
+func (u *UserUpsert) SetCodexContinueMaxContinue(v int) *UserUpsert {
+	u.Set(user.FieldCodexContinueMaxContinue, v)
+	return u
+}
+
+// UpdateCodexContinueMaxContinue sets the "codex_continue_max_continue" field to the value that was provided on create.
+func (u *UserUpsert) UpdateCodexContinueMaxContinue() *UserUpsert {
+	u.SetExcluded(user.FieldCodexContinueMaxContinue)
+	return u
+}
+
+// AddCodexContinueMaxContinue adds v to the "codex_continue_max_continue" field.
+func (u *UserUpsert) AddCodexContinueMaxContinue(v int) *UserUpsert {
+	u.Add(user.FieldCodexContinueMaxContinue, v)
+	return u
+}
+
+// SetCodexContinueRetryMax sets the "codex_continue_retry_max" field.
+func (u *UserUpsert) SetCodexContinueRetryMax(v int) *UserUpsert {
+	u.Set(user.FieldCodexContinueRetryMax, v)
+	return u
+}
+
+// UpdateCodexContinueRetryMax sets the "codex_continue_retry_max" field to the value that was provided on create.
+func (u *UserUpsert) UpdateCodexContinueRetryMax() *UserUpsert {
+	u.SetExcluded(user.FieldCodexContinueRetryMax)
+	return u
+}
+
+// AddCodexContinueRetryMax adds v to the "codex_continue_retry_max" field.
+func (u *UserUpsert) AddCodexContinueRetryMax(v int) *UserUpsert {
+	u.Add(user.FieldCodexContinueRetryMax, v)
+	return u
+}
+
+// SetCodexContinueLowReasoningFloor sets the "codex_continue_low_reasoning_floor" field.
+func (u *UserUpsert) SetCodexContinueLowReasoningFloor(v int) *UserUpsert {
+	u.Set(user.FieldCodexContinueLowReasoningFloor, v)
+	return u
+}
+
+// UpdateCodexContinueLowReasoningFloor sets the "codex_continue_low_reasoning_floor" field to the value that was provided on create.
+func (u *UserUpsert) UpdateCodexContinueLowReasoningFloor() *UserUpsert {
+	u.SetExcluded(user.FieldCodexContinueLowReasoningFloor)
+	return u
+}
+
+// AddCodexContinueLowReasoningFloor adds v to the "codex_continue_low_reasoning_floor" field.
+func (u *UserUpsert) AddCodexContinueLowReasoningFloor(v int) *UserUpsert {
+	u.Add(user.FieldCodexContinueLowReasoningFloor, v)
+	return u
+}
+
 // UpdateNewValues updates the mutable fields using the new values that were set on create.
 // Using this option is equivalent to using:
 //
@@ -1979,6 +2108,69 @@ func (u *UserUpsertOne) SetCodexContinueEnabled(v bool) *UserUpsertOne {
 func (u *UserUpsertOne) UpdateCodexContinueEnabled() *UserUpsertOne {
 	return u.Update(func(s *UserUpsert) {
 		s.UpdateCodexContinueEnabled()
+	})
+}
+
+// SetCodexContinueMaxContinue sets the "codex_continue_max_continue" field.
+func (u *UserUpsertOne) SetCodexContinueMaxContinue(v int) *UserUpsertOne {
+	return u.Update(func(s *UserUpsert) {
+		s.SetCodexContinueMaxContinue(v)
+	})
+}
+
+// AddCodexContinueMaxContinue adds v to the "codex_continue_max_continue" field.
+func (u *UserUpsertOne) AddCodexContinueMaxContinue(v int) *UserUpsertOne {
+	return u.Update(func(s *UserUpsert) {
+		s.AddCodexContinueMaxContinue(v)
+	})
+}
+
+// UpdateCodexContinueMaxContinue sets the "codex_continue_max_continue" field to the value that was provided on create.
+func (u *UserUpsertOne) UpdateCodexContinueMaxContinue() *UserUpsertOne {
+	return u.Update(func(s *UserUpsert) {
+		s.UpdateCodexContinueMaxContinue()
+	})
+}
+
+// SetCodexContinueRetryMax sets the "codex_continue_retry_max" field.
+func (u *UserUpsertOne) SetCodexContinueRetryMax(v int) *UserUpsertOne {
+	return u.Update(func(s *UserUpsert) {
+		s.SetCodexContinueRetryMax(v)
+	})
+}
+
+// AddCodexContinueRetryMax adds v to the "codex_continue_retry_max" field.
+func (u *UserUpsertOne) AddCodexContinueRetryMax(v int) *UserUpsertOne {
+	return u.Update(func(s *UserUpsert) {
+		s.AddCodexContinueRetryMax(v)
+	})
+}
+
+// UpdateCodexContinueRetryMax sets the "codex_continue_retry_max" field to the value that was provided on create.
+func (u *UserUpsertOne) UpdateCodexContinueRetryMax() *UserUpsertOne {
+	return u.Update(func(s *UserUpsert) {
+		s.UpdateCodexContinueRetryMax()
+	})
+}
+
+// SetCodexContinueLowReasoningFloor sets the "codex_continue_low_reasoning_floor" field.
+func (u *UserUpsertOne) SetCodexContinueLowReasoningFloor(v int) *UserUpsertOne {
+	return u.Update(func(s *UserUpsert) {
+		s.SetCodexContinueLowReasoningFloor(v)
+	})
+}
+
+// AddCodexContinueLowReasoningFloor adds v to the "codex_continue_low_reasoning_floor" field.
+func (u *UserUpsertOne) AddCodexContinueLowReasoningFloor(v int) *UserUpsertOne {
+	return u.Update(func(s *UserUpsert) {
+		s.AddCodexContinueLowReasoningFloor(v)
+	})
+}
+
+// UpdateCodexContinueLowReasoningFloor sets the "codex_continue_low_reasoning_floor" field to the value that was provided on create.
+func (u *UserUpsertOne) UpdateCodexContinueLowReasoningFloor() *UserUpsertOne {
+	return u.Update(func(s *UserUpsert) {
+		s.UpdateCodexContinueLowReasoningFloor()
 	})
 }
 
@@ -2610,6 +2802,69 @@ func (u *UserUpsertBulk) SetCodexContinueEnabled(v bool) *UserUpsertBulk {
 func (u *UserUpsertBulk) UpdateCodexContinueEnabled() *UserUpsertBulk {
 	return u.Update(func(s *UserUpsert) {
 		s.UpdateCodexContinueEnabled()
+	})
+}
+
+// SetCodexContinueMaxContinue sets the "codex_continue_max_continue" field.
+func (u *UserUpsertBulk) SetCodexContinueMaxContinue(v int) *UserUpsertBulk {
+	return u.Update(func(s *UserUpsert) {
+		s.SetCodexContinueMaxContinue(v)
+	})
+}
+
+// AddCodexContinueMaxContinue adds v to the "codex_continue_max_continue" field.
+func (u *UserUpsertBulk) AddCodexContinueMaxContinue(v int) *UserUpsertBulk {
+	return u.Update(func(s *UserUpsert) {
+		s.AddCodexContinueMaxContinue(v)
+	})
+}
+
+// UpdateCodexContinueMaxContinue sets the "codex_continue_max_continue" field to the value that was provided on create.
+func (u *UserUpsertBulk) UpdateCodexContinueMaxContinue() *UserUpsertBulk {
+	return u.Update(func(s *UserUpsert) {
+		s.UpdateCodexContinueMaxContinue()
+	})
+}
+
+// SetCodexContinueRetryMax sets the "codex_continue_retry_max" field.
+func (u *UserUpsertBulk) SetCodexContinueRetryMax(v int) *UserUpsertBulk {
+	return u.Update(func(s *UserUpsert) {
+		s.SetCodexContinueRetryMax(v)
+	})
+}
+
+// AddCodexContinueRetryMax adds v to the "codex_continue_retry_max" field.
+func (u *UserUpsertBulk) AddCodexContinueRetryMax(v int) *UserUpsertBulk {
+	return u.Update(func(s *UserUpsert) {
+		s.AddCodexContinueRetryMax(v)
+	})
+}
+
+// UpdateCodexContinueRetryMax sets the "codex_continue_retry_max" field to the value that was provided on create.
+func (u *UserUpsertBulk) UpdateCodexContinueRetryMax() *UserUpsertBulk {
+	return u.Update(func(s *UserUpsert) {
+		s.UpdateCodexContinueRetryMax()
+	})
+}
+
+// SetCodexContinueLowReasoningFloor sets the "codex_continue_low_reasoning_floor" field.
+func (u *UserUpsertBulk) SetCodexContinueLowReasoningFloor(v int) *UserUpsertBulk {
+	return u.Update(func(s *UserUpsert) {
+		s.SetCodexContinueLowReasoningFloor(v)
+	})
+}
+
+// AddCodexContinueLowReasoningFloor adds v to the "codex_continue_low_reasoning_floor" field.
+func (u *UserUpsertBulk) AddCodexContinueLowReasoningFloor(v int) *UserUpsertBulk {
+	return u.Update(func(s *UserUpsert) {
+		s.AddCodexContinueLowReasoningFloor(v)
+	})
+}
+
+// UpdateCodexContinueLowReasoningFloor sets the "codex_continue_low_reasoning_floor" field to the value that was provided on create.
+func (u *UserUpsertBulk) UpdateCodexContinueLowReasoningFloor() *UserUpsertBulk {
+	return u.Update(func(s *UserUpsert) {
+		s.UpdateCodexContinueLowReasoningFloor()
 	})
 }
 

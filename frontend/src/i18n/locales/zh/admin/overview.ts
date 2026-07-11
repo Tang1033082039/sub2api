@@ -539,7 +539,16 @@ export default {
         rpmLimitPlaceholder: '0 表示不限制',
         rpmLimitHint: '该用户每分钟最大请求数，0 = 不限制；仅在所用分组未设置 rpm_limit 时作为兜底生效',
         codexContinueEnabled: '启用 Codex 连续推理续写',
-        codexContinueHint: '允许该用户使用 Codex 连续推理续写功能'
+        codexContinueHint: '允许该用户使用 Codex 连续推理续写功能',
+        codexContinueMaxContinue: '截断续写轮数上限',
+        codexContinueMaxContinuePlaceholder: '0 表示不限制',
+        codexContinueMaxContinueHint: '命中截断指纹时最多续写多少轮，0 = 不限制',
+        codexContinueRetryMax: '低推理重试次数上限',
+        codexContinueRetryMaxPlaceholder: '0 表示不限制',
+        codexContinueRetryMaxHint: '推理量偏低时最多重新整体问几次，0 = 不限制',
+        codexContinueLowReasoningFloor: '低推理重试下限阈值',
+        codexContinueLowReasoningFloorPlaceholder: '0 表示不设下限',
+        codexContinueLowReasoningFloorHint: 'reasoning_tokens 低于该值时视为无需推理的简单问题，不触发重试；0 = 不设下限'
       },
       adjustBalance: '调整余额',
       adjustConcurrency: '调整并发数',

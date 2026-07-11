@@ -65,6 +65,12 @@ const (
 	FieldRpmLimit = "rpm_limit"
 	// FieldCodexContinueEnabled holds the string denoting the codex_continue_enabled field in the database.
 	FieldCodexContinueEnabled = "codex_continue_enabled"
+	// FieldCodexContinueMaxContinue holds the string denoting the codex_continue_max_continue field in the database.
+	FieldCodexContinueMaxContinue = "codex_continue_max_continue"
+	// FieldCodexContinueRetryMax holds the string denoting the codex_continue_retry_max field in the database.
+	FieldCodexContinueRetryMax = "codex_continue_retry_max"
+	// FieldCodexContinueLowReasoningFloor holds the string denoting the codex_continue_low_reasoning_floor field in the database.
+	FieldCodexContinueLowReasoningFloor = "codex_continue_low_reasoning_floor"
 	// EdgeAPIKeys holds the string denoting the api_keys edge name in mutations.
 	EdgeAPIKeys = "api_keys"
 	// EdgeRedeemCodes holds the string denoting the redeem_codes edge name in mutations.
@@ -221,6 +227,9 @@ var Columns = []string{
 	FieldTotalRecharged,
 	FieldRpmLimit,
 	FieldCodexContinueEnabled,
+	FieldCodexContinueMaxContinue,
+	FieldCodexContinueRetryMax,
+	FieldCodexContinueLowReasoningFloor,
 }
 
 var (
@@ -295,6 +304,12 @@ var (
 	DefaultRpmLimit int
 	// DefaultCodexContinueEnabled holds the default value on creation for the "codex_continue_enabled" field.
 	DefaultCodexContinueEnabled bool
+	// DefaultCodexContinueMaxContinue holds the default value on creation for the "codex_continue_max_continue" field.
+	DefaultCodexContinueMaxContinue int
+	// DefaultCodexContinueRetryMax holds the default value on creation for the "codex_continue_retry_max" field.
+	DefaultCodexContinueRetryMax int
+	// DefaultCodexContinueLowReasoningFloor holds the default value on creation for the "codex_continue_low_reasoning_floor" field.
+	DefaultCodexContinueLowReasoningFloor int
 )
 
 // OrderOption defines the ordering options for the User queries.
@@ -428,6 +443,21 @@ func ByRpmLimit(opts ...sql.OrderTermOption) OrderOption {
 // ByCodexContinueEnabled orders the results by the codex_continue_enabled field.
 func ByCodexContinueEnabled(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldCodexContinueEnabled, opts...).ToFunc()
+}
+
+// ByCodexContinueMaxContinue orders the results by the codex_continue_max_continue field.
+func ByCodexContinueMaxContinue(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldCodexContinueMaxContinue, opts...).ToFunc()
+}
+
+// ByCodexContinueRetryMax orders the results by the codex_continue_retry_max field.
+func ByCodexContinueRetryMax(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldCodexContinueRetryMax, opts...).ToFunc()
+}
+
+// ByCodexContinueLowReasoningFloor orders the results by the codex_continue_low_reasoning_floor field.
+func ByCodexContinueLowReasoningFloor(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldCodexContinueLowReasoningFloor, opts...).ToFunc()
 }
 
 // ByAPIKeysCount orders the results by api_keys count.

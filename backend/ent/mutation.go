@@ -45626,83 +45626,89 @@ func (m *UsageLogMutation) ResetEdge(name string) error {
 // UserMutation represents an operation that mutates the User nodes in the graph.
 type UserMutation struct {
 	config
-	op                            Op
-	typ                           string
-	id                            *int64
-	created_at                    *time.Time
-	updated_at                    *time.Time
-	deleted_at                    *time.Time
-	email                         *string
-	password_hash                 *string
-	role                          *string
-	balance                       *float64
-	addbalance                    *float64
-	frozen_balance                *float64
-	addfrozen_balance             *float64
-	concurrency                   *int
-	addconcurrency                *int
-	status                        *string
-	username                      *string
-	notes                         *string
-	totp_secret_encrypted         *string
-	totp_enabled                  *bool
-	totp_enabled_at               *time.Time
-	signup_source                 *string
-	last_login_at                 *time.Time
-	last_active_at                *time.Time
-	balance_notify_enabled        *bool
-	balance_notify_threshold_type *string
-	balance_notify_threshold      *float64
-	addbalance_notify_threshold   *float64
-	balance_notify_extra_emails   *string
-	total_recharged               *float64
-	addtotal_recharged            *float64
-	rpm_limit                     *int
-	addrpm_limit                  *int
-	codex_continue_enabled        *bool
-	clearedFields                 map[string]struct{}
-	api_keys                      map[int64]struct{}
-	removedapi_keys               map[int64]struct{}
-	clearedapi_keys               bool
-	redeem_codes                  map[int64]struct{}
-	removedredeem_codes           map[int64]struct{}
-	clearedredeem_codes           bool
-	subscriptions                 map[int64]struct{}
-	removedsubscriptions          map[int64]struct{}
-	clearedsubscriptions          bool
-	assigned_subscriptions        map[int64]struct{}
-	removedassigned_subscriptions map[int64]struct{}
-	clearedassigned_subscriptions bool
-	announcement_reads            map[int64]struct{}
-	removedannouncement_reads     map[int64]struct{}
-	clearedannouncement_reads     bool
-	allowed_groups                map[int64]struct{}
-	removedallowed_groups         map[int64]struct{}
-	clearedallowed_groups         bool
-	usage_logs                    map[int64]struct{}
-	removedusage_logs             map[int64]struct{}
-	clearedusage_logs             bool
-	attribute_values              map[int64]struct{}
-	removedattribute_values       map[int64]struct{}
-	clearedattribute_values       bool
-	promo_code_usages             map[int64]struct{}
-	removedpromo_code_usages      map[int64]struct{}
-	clearedpromo_code_usages      bool
-	payment_orders                map[int64]struct{}
-	removedpayment_orders         map[int64]struct{}
-	clearedpayment_orders         bool
-	auth_identities               map[int64]struct{}
-	removedauth_identities        map[int64]struct{}
-	clearedauth_identities        bool
-	pending_auth_sessions         map[int64]struct{}
-	removedpending_auth_sessions  map[int64]struct{}
-	clearedpending_auth_sessions  bool
-	platform_quotas               map[int64]struct{}
-	removedplatform_quotas        map[int64]struct{}
-	clearedplatform_quotas        bool
-	done                          bool
-	oldValue                      func(context.Context) (*User, error)
-	predicates                    []predicate.User
+	op                                    Op
+	typ                                   string
+	id                                    *int64
+	created_at                            *time.Time
+	updated_at                            *time.Time
+	deleted_at                            *time.Time
+	email                                 *string
+	password_hash                         *string
+	role                                  *string
+	balance                               *float64
+	addbalance                            *float64
+	frozen_balance                        *float64
+	addfrozen_balance                     *float64
+	concurrency                           *int
+	addconcurrency                        *int
+	status                                *string
+	username                              *string
+	notes                                 *string
+	totp_secret_encrypted                 *string
+	totp_enabled                          *bool
+	totp_enabled_at                       *time.Time
+	signup_source                         *string
+	last_login_at                         *time.Time
+	last_active_at                        *time.Time
+	balance_notify_enabled                *bool
+	balance_notify_threshold_type         *string
+	balance_notify_threshold              *float64
+	addbalance_notify_threshold           *float64
+	balance_notify_extra_emails           *string
+	total_recharged                       *float64
+	addtotal_recharged                    *float64
+	rpm_limit                             *int
+	addrpm_limit                          *int
+	codex_continue_enabled                *bool
+	codex_continue_max_continue           *int
+	addcodex_continue_max_continue        *int
+	codex_continue_retry_max              *int
+	addcodex_continue_retry_max           *int
+	codex_continue_low_reasoning_floor    *int
+	addcodex_continue_low_reasoning_floor *int
+	clearedFields                         map[string]struct{}
+	api_keys                              map[int64]struct{}
+	removedapi_keys                       map[int64]struct{}
+	clearedapi_keys                       bool
+	redeem_codes                          map[int64]struct{}
+	removedredeem_codes                   map[int64]struct{}
+	clearedredeem_codes                   bool
+	subscriptions                         map[int64]struct{}
+	removedsubscriptions                  map[int64]struct{}
+	clearedsubscriptions                  bool
+	assigned_subscriptions                map[int64]struct{}
+	removedassigned_subscriptions         map[int64]struct{}
+	clearedassigned_subscriptions         bool
+	announcement_reads                    map[int64]struct{}
+	removedannouncement_reads             map[int64]struct{}
+	clearedannouncement_reads             bool
+	allowed_groups                        map[int64]struct{}
+	removedallowed_groups                 map[int64]struct{}
+	clearedallowed_groups                 bool
+	usage_logs                            map[int64]struct{}
+	removedusage_logs                     map[int64]struct{}
+	clearedusage_logs                     bool
+	attribute_values                      map[int64]struct{}
+	removedattribute_values               map[int64]struct{}
+	clearedattribute_values               bool
+	promo_code_usages                     map[int64]struct{}
+	removedpromo_code_usages              map[int64]struct{}
+	clearedpromo_code_usages              bool
+	payment_orders                        map[int64]struct{}
+	removedpayment_orders                 map[int64]struct{}
+	clearedpayment_orders                 bool
+	auth_identities                       map[int64]struct{}
+	removedauth_identities                map[int64]struct{}
+	clearedauth_identities                bool
+	pending_auth_sessions                 map[int64]struct{}
+	removedpending_auth_sessions          map[int64]struct{}
+	clearedpending_auth_sessions          bool
+	platform_quotas                       map[int64]struct{}
+	removedplatform_quotas                map[int64]struct{}
+	clearedplatform_quotas                bool
+	done                                  bool
+	oldValue                              func(context.Context) (*User, error)
+	predicates                            []predicate.User
 }
 
 var _ ent.Mutation = (*UserMutation)(nil)
@@ -46902,6 +46908,174 @@ func (m *UserMutation) ResetCodexContinueEnabled() {
 	m.codex_continue_enabled = nil
 }
 
+// SetCodexContinueMaxContinue sets the "codex_continue_max_continue" field.
+func (m *UserMutation) SetCodexContinueMaxContinue(i int) {
+	m.codex_continue_max_continue = &i
+	m.addcodex_continue_max_continue = nil
+}
+
+// CodexContinueMaxContinue returns the value of the "codex_continue_max_continue" field in the mutation.
+func (m *UserMutation) CodexContinueMaxContinue() (r int, exists bool) {
+	v := m.codex_continue_max_continue
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldCodexContinueMaxContinue returns the old "codex_continue_max_continue" field's value of the User entity.
+// If the User object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *UserMutation) OldCodexContinueMaxContinue(ctx context.Context) (v int, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldCodexContinueMaxContinue is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldCodexContinueMaxContinue requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldCodexContinueMaxContinue: %w", err)
+	}
+	return oldValue.CodexContinueMaxContinue, nil
+}
+
+// AddCodexContinueMaxContinue adds i to the "codex_continue_max_continue" field.
+func (m *UserMutation) AddCodexContinueMaxContinue(i int) {
+	if m.addcodex_continue_max_continue != nil {
+		*m.addcodex_continue_max_continue += i
+	} else {
+		m.addcodex_continue_max_continue = &i
+	}
+}
+
+// AddedCodexContinueMaxContinue returns the value that was added to the "codex_continue_max_continue" field in this mutation.
+func (m *UserMutation) AddedCodexContinueMaxContinue() (r int, exists bool) {
+	v := m.addcodex_continue_max_continue
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ResetCodexContinueMaxContinue resets all changes to the "codex_continue_max_continue" field.
+func (m *UserMutation) ResetCodexContinueMaxContinue() {
+	m.codex_continue_max_continue = nil
+	m.addcodex_continue_max_continue = nil
+}
+
+// SetCodexContinueRetryMax sets the "codex_continue_retry_max" field.
+func (m *UserMutation) SetCodexContinueRetryMax(i int) {
+	m.codex_continue_retry_max = &i
+	m.addcodex_continue_retry_max = nil
+}
+
+// CodexContinueRetryMax returns the value of the "codex_continue_retry_max" field in the mutation.
+func (m *UserMutation) CodexContinueRetryMax() (r int, exists bool) {
+	v := m.codex_continue_retry_max
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldCodexContinueRetryMax returns the old "codex_continue_retry_max" field's value of the User entity.
+// If the User object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *UserMutation) OldCodexContinueRetryMax(ctx context.Context) (v int, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldCodexContinueRetryMax is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldCodexContinueRetryMax requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldCodexContinueRetryMax: %w", err)
+	}
+	return oldValue.CodexContinueRetryMax, nil
+}
+
+// AddCodexContinueRetryMax adds i to the "codex_continue_retry_max" field.
+func (m *UserMutation) AddCodexContinueRetryMax(i int) {
+	if m.addcodex_continue_retry_max != nil {
+		*m.addcodex_continue_retry_max += i
+	} else {
+		m.addcodex_continue_retry_max = &i
+	}
+}
+
+// AddedCodexContinueRetryMax returns the value that was added to the "codex_continue_retry_max" field in this mutation.
+func (m *UserMutation) AddedCodexContinueRetryMax() (r int, exists bool) {
+	v := m.addcodex_continue_retry_max
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ResetCodexContinueRetryMax resets all changes to the "codex_continue_retry_max" field.
+func (m *UserMutation) ResetCodexContinueRetryMax() {
+	m.codex_continue_retry_max = nil
+	m.addcodex_continue_retry_max = nil
+}
+
+// SetCodexContinueLowReasoningFloor sets the "codex_continue_low_reasoning_floor" field.
+func (m *UserMutation) SetCodexContinueLowReasoningFloor(i int) {
+	m.codex_continue_low_reasoning_floor = &i
+	m.addcodex_continue_low_reasoning_floor = nil
+}
+
+// CodexContinueLowReasoningFloor returns the value of the "codex_continue_low_reasoning_floor" field in the mutation.
+func (m *UserMutation) CodexContinueLowReasoningFloor() (r int, exists bool) {
+	v := m.codex_continue_low_reasoning_floor
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldCodexContinueLowReasoningFloor returns the old "codex_continue_low_reasoning_floor" field's value of the User entity.
+// If the User object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *UserMutation) OldCodexContinueLowReasoningFloor(ctx context.Context) (v int, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldCodexContinueLowReasoningFloor is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldCodexContinueLowReasoningFloor requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldCodexContinueLowReasoningFloor: %w", err)
+	}
+	return oldValue.CodexContinueLowReasoningFloor, nil
+}
+
+// AddCodexContinueLowReasoningFloor adds i to the "codex_continue_low_reasoning_floor" field.
+func (m *UserMutation) AddCodexContinueLowReasoningFloor(i int) {
+	if m.addcodex_continue_low_reasoning_floor != nil {
+		*m.addcodex_continue_low_reasoning_floor += i
+	} else {
+		m.addcodex_continue_low_reasoning_floor = &i
+	}
+}
+
+// AddedCodexContinueLowReasoningFloor returns the value that was added to the "codex_continue_low_reasoning_floor" field in this mutation.
+func (m *UserMutation) AddedCodexContinueLowReasoningFloor() (r int, exists bool) {
+	v := m.addcodex_continue_low_reasoning_floor
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ResetCodexContinueLowReasoningFloor resets all changes to the "codex_continue_low_reasoning_floor" field.
+func (m *UserMutation) ResetCodexContinueLowReasoningFloor() {
+	m.codex_continue_low_reasoning_floor = nil
+	m.addcodex_continue_low_reasoning_floor = nil
+}
+
 // AddAPIKeyIDs adds the "api_keys" edge to the APIKey entity by ids.
 func (m *UserMutation) AddAPIKeyIDs(ids ...int64) {
 	if m.api_keys == nil {
@@ -47638,7 +47812,7 @@ func (m *UserMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *UserMutation) Fields() []string {
-	fields := make([]string, 0, 25)
+	fields := make([]string, 0, 28)
 	if m.created_at != nil {
 		fields = append(fields, user.FieldCreatedAt)
 	}
@@ -47714,6 +47888,15 @@ func (m *UserMutation) Fields() []string {
 	if m.codex_continue_enabled != nil {
 		fields = append(fields, user.FieldCodexContinueEnabled)
 	}
+	if m.codex_continue_max_continue != nil {
+		fields = append(fields, user.FieldCodexContinueMaxContinue)
+	}
+	if m.codex_continue_retry_max != nil {
+		fields = append(fields, user.FieldCodexContinueRetryMax)
+	}
+	if m.codex_continue_low_reasoning_floor != nil {
+		fields = append(fields, user.FieldCodexContinueLowReasoningFloor)
+	}
 	return fields
 }
 
@@ -47772,6 +47955,12 @@ func (m *UserMutation) Field(name string) (ent.Value, bool) {
 		return m.RpmLimit()
 	case user.FieldCodexContinueEnabled:
 		return m.CodexContinueEnabled()
+	case user.FieldCodexContinueMaxContinue:
+		return m.CodexContinueMaxContinue()
+	case user.FieldCodexContinueRetryMax:
+		return m.CodexContinueRetryMax()
+	case user.FieldCodexContinueLowReasoningFloor:
+		return m.CodexContinueLowReasoningFloor()
 	}
 	return nil, false
 }
@@ -47831,6 +48020,12 @@ func (m *UserMutation) OldField(ctx context.Context, name string) (ent.Value, er
 		return m.OldRpmLimit(ctx)
 	case user.FieldCodexContinueEnabled:
 		return m.OldCodexContinueEnabled(ctx)
+	case user.FieldCodexContinueMaxContinue:
+		return m.OldCodexContinueMaxContinue(ctx)
+	case user.FieldCodexContinueRetryMax:
+		return m.OldCodexContinueRetryMax(ctx)
+	case user.FieldCodexContinueLowReasoningFloor:
+		return m.OldCodexContinueLowReasoningFloor(ctx)
 	}
 	return nil, fmt.Errorf("unknown User field %s", name)
 }
@@ -48015,6 +48210,27 @@ func (m *UserMutation) SetField(name string, value ent.Value) error {
 		}
 		m.SetCodexContinueEnabled(v)
 		return nil
+	case user.FieldCodexContinueMaxContinue:
+		v, ok := value.(int)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetCodexContinueMaxContinue(v)
+		return nil
+	case user.FieldCodexContinueRetryMax:
+		v, ok := value.(int)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetCodexContinueRetryMax(v)
+		return nil
+	case user.FieldCodexContinueLowReasoningFloor:
+		v, ok := value.(int)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetCodexContinueLowReasoningFloor(v)
+		return nil
 	}
 	return fmt.Errorf("unknown User field %s", name)
 }
@@ -48041,6 +48257,15 @@ func (m *UserMutation) AddedFields() []string {
 	if m.addrpm_limit != nil {
 		fields = append(fields, user.FieldRpmLimit)
 	}
+	if m.addcodex_continue_max_continue != nil {
+		fields = append(fields, user.FieldCodexContinueMaxContinue)
+	}
+	if m.addcodex_continue_retry_max != nil {
+		fields = append(fields, user.FieldCodexContinueRetryMax)
+	}
+	if m.addcodex_continue_low_reasoning_floor != nil {
+		fields = append(fields, user.FieldCodexContinueLowReasoningFloor)
+	}
 	return fields
 }
 
@@ -48061,6 +48286,12 @@ func (m *UserMutation) AddedField(name string) (ent.Value, bool) {
 		return m.AddedTotalRecharged()
 	case user.FieldRpmLimit:
 		return m.AddedRpmLimit()
+	case user.FieldCodexContinueMaxContinue:
+		return m.AddedCodexContinueMaxContinue()
+	case user.FieldCodexContinueRetryMax:
+		return m.AddedCodexContinueRetryMax()
+	case user.FieldCodexContinueLowReasoningFloor:
+		return m.AddedCodexContinueLowReasoningFloor()
 	}
 	return nil, false
 }
@@ -48111,6 +48342,27 @@ func (m *UserMutation) AddField(name string, value ent.Value) error {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
 		m.AddRpmLimit(v)
+		return nil
+	case user.FieldCodexContinueMaxContinue:
+		v, ok := value.(int)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddCodexContinueMaxContinue(v)
+		return nil
+	case user.FieldCodexContinueRetryMax:
+		v, ok := value.(int)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddCodexContinueRetryMax(v)
+		return nil
+	case user.FieldCodexContinueLowReasoningFloor:
+		v, ok := value.(int)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddCodexContinueLowReasoningFloor(v)
 		return nil
 	}
 	return fmt.Errorf("unknown User numeric field %s", name)
@@ -48252,6 +48504,15 @@ func (m *UserMutation) ResetField(name string) error {
 		return nil
 	case user.FieldCodexContinueEnabled:
 		m.ResetCodexContinueEnabled()
+		return nil
+	case user.FieldCodexContinueMaxContinue:
+		m.ResetCodexContinueMaxContinue()
+		return nil
+	case user.FieldCodexContinueRetryMax:
+		m.ResetCodexContinueRetryMax()
+		return nil
+	case user.FieldCodexContinueLowReasoningFloor:
+		m.ResetCodexContinueLowReasoningFloor()
 		return nil
 	}
 	return fmt.Errorf("unknown User field %s", name)

@@ -480,7 +480,16 @@ export default {
         rpmLimitPlaceholder: '0 = unlimited',
         rpmLimitHint: 'Max requests per minute for this user; 0 = unlimited. Acts as a fallback only when the group has no rpm_limit set.',
         codexContinueEnabled: 'Enable Codex continuation',
-        codexContinueHint: 'Allow this user to use the Codex continuation feature'
+        codexContinueHint: 'Allow this user to use the Codex continuation feature',
+        codexContinueMaxContinue: 'Truncation-continue round cap',
+        codexContinueMaxContinuePlaceholder: '0 = unlimited',
+        codexContinueMaxContinueHint: 'Max rounds to continue when the truncation fingerprint is hit; 0 = unlimited',
+        codexContinueRetryMax: 'Low-reasoning retry attempt cap',
+        codexContinueRetryMaxPlaceholder: '0 = unlimited',
+        codexContinueRetryMaxHint: 'Max times to reroll the whole request when reasoning is low; 0 = unlimited',
+        codexContinueLowReasoningFloor: 'Low-reasoning retry floor',
+        codexContinueLowReasoningFloorPlaceholder: '0 = no floor',
+        codexContinueLowReasoningFloorHint: 'Below this reasoning_tokens value the answer is treated as genuinely simple and no retry is triggered; 0 = no floor'
       },
       columns: {
         user: 'User',

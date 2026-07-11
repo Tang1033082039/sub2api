@@ -21,16 +21,18 @@ import (
 
 const (
 	codexContinueTruncationStep = 518
-	codexContinueMaxContinue    = 3
 	codexContinueMinN           = 1
-	// codexContinueFirstRoundMin 是"首轮低推理重试"区间的上限（不含）；达到或超过
+	// codexContinueFirstRoundMin 是"低推理重试"区间的上限（不含）；达到或超过
 	// 该值时按精确截断指纹（518n-2）逻辑处理，不再走重试。
 	codexContinueFirstRoundMin = codexContinueTruncationStep - 2
-	// codexContinueLowReasoningFloor 是"首轮低推理重试"区间的下限（含）；低于该值
-	// 视为真正无需推理即可正确回答的简单问题，不触发重试。
-	codexContinueLowReasoningFloor = 200
-	codexContinueMarkerText        = "Continue thinking..."
-	openAISSEDone                  = "[DONE]"
+	codexContinueMarkerText    = "Continue thinking..."
+	openAISSEDone              = "[DONE]"
+
+	// codexContinueDefaultMaxContinue 等三项是用户未显式配置或鉴权缓存缺失时的
+	// 应用层兜底默认值，与迁移 175 的 DB 列默认值保持一致。
+	codexContinueDefaultMaxContinue       = 0
+	codexContinueDefaultRetryMax          = 2
+	codexContinueDefaultLowReasoningFloor = 150
 )
 
 type codexContinueFoldResult struct {
@@ -223,7 +225,7 @@ func (s *OpenAIGatewayService) foldCodexContinueStream(
 	var baseResponse map[string]any
 	finalOutput := make([]any, 0)
 	replayTail := make([]any, 0)
-	roundsInfo := make([]map[string]any, 0, codexContinueMaxContinue+1)
+	roundsInfo := make([]map[string]any, 0, 4)
 	usageSum := &codexContinueUsageSum{}
 	var firstRawUsage map[string]any
 	var finalRawUsage map[string]any
@@ -231,6 +233,17 @@ func (s *OpenAIGatewayService) foldCodexContinueStream(
 	imageCounter := newOpenAIImageOutputCounter()
 	currentResp := resp
 	var pendingLowReasoningRound *codexContinueRound
+	truncationContinueCount := 0
+	lowReasoningRetryCount := 0
+
+	maxContinueLimit := codexContinueDefaultMaxContinue
+	retryMaxLimit := codexContinueDefaultRetryMax
+	lowReasoningFloor := codexContinueDefaultLowReasoningFloor
+	if apiKey := getAPIKeyFromContext(c); apiKey != nil && apiKey.User != nil {
+		maxContinueLimit = apiKey.User.CodexContinueMaxContinue
+		retryMaxLimit = apiKey.User.CodexContinueRetryMax
+		lowReasoningFloor = apiKey.User.CodexContinueLowReasoningFloor
+	}
 
 	for roundNo := 1; ; roundNo++ {
 		round, readErr := s.readCodexContinueRound(ctx, currentResp, account, roundNo, seq, &downstreamOutputIndex, &baseResponse, &firstVisibleResponseID, writeEvent, imageCounter, originalModel, upstreamModel, startTime, &firstTokenMs)
@@ -262,8 +275,8 @@ func (s *OpenAIGatewayService) foldCodexContinueStream(
 			last := round.reasoningItems[len(round.reasoningItems)-1]
 			_, hasEncrypted = last["encrypted_content"].(string)
 		}
-		isTruncationContinue := round.sawTerminal && codexContinueShouldContinue(reasoningTokens) && hasEncrypted && roundNo <= codexContinueMaxContinue
-		isLowReasoningRetry := round.sawTerminal && pendingLowReasoningRound == nil && codexContinueIsLowReasoningRetryCandidate(roundNo, reasoningTokens)
+		isTruncationContinue := round.sawTerminal && codexContinueShouldContinue(reasoningTokens) && hasEncrypted && codexContinueWithinCap(truncationContinueCount+1, maxContinueLimit)
+		isLowReasoningRetry := !isTruncationContinue && round.sawTerminal && codexContinueWithinCap(lowReasoningRetryCount+1, retryMaxLimit) && codexContinueIsLowReasoningRetryCandidate(reasoningTokens, lowReasoningFloor, codexContinueFirstRoundMin)
 
 		stopReason := ""
 		switch {
@@ -275,7 +288,7 @@ func (s *OpenAIGatewayService) foldCodexContinueStream(
 			switch {
 			case !hasEncrypted:
 				stopReason = "no_encrypted_content"
-			case roundNo > codexContinueMaxContinue:
+			case !codexContinueWithinCap(truncationContinueCount+1, maxContinueLimit):
 				stopReason = "max_continue"
 			default:
 				stopReason = "tier_out_of_window"
@@ -284,6 +297,7 @@ func (s *OpenAIGatewayService) foldCodexContinueStream(
 		trace.Rounds = append(trace.Rounds, traceRound)
 
 		if isTruncationContinue {
+			truncationContinueCount++
 			for _, item := range round.reasoningItems {
 				finalOutput = append(finalOutput, cloneJSONMap(item))
 			}
@@ -319,12 +333,15 @@ func (s *OpenAIGatewayService) foldCodexContinueStream(
 			if marshalErr == nil {
 				nextResp, _, sendErr := s.sendCodexContinueNextRound(ctx, c, account, nextBody, token, promptCacheKey, isCodexCLI)
 				if sendErr == nil {
-					pendingLowReasoningRound = round
+					if pendingLowReasoningRound == nil || reasoningTokens > codexContinueReasoningTokens(pendingLowReasoningRound.rawUsage) {
+						pendingLowReasoningRound = round
+					}
+					lowReasoningRetryCount++
 					currentResp = nextResp
 					continue
 				}
 			}
-			// 重试请求本身发起失败：保留首轮已经拿到的正常答案，不因为"多试一次"的失败丢掉它
+			// 重试请求本身发起失败：保留目前手里最好的一轮，不因为"多试一次"的失败丢掉它
 			stopReason = "low_reasoning_retry_send_failed"
 		}
 
@@ -644,11 +661,20 @@ func codexContinueShouldContinue(tokens int) bool {
 	return n >= codexContinueMinN
 }
 
-// codexContinueIsLowReasoningRetryCandidate 判断首轮是否需要整体重问一遍（reroll）。
-// 只在首轮生效：推理量落在 [floor, ceil) 之间，说明模型自己认为已经想完但想得不够多；
-// 不要求 encrypted_content，因为重试是重新发送原始请求，不回放任何 reasoning。
-func codexContinueIsLowReasoningRetryCandidate(roundNo, tokens int) bool {
-	return roundNo == 1 && tokens >= codexContinueLowReasoningFloor && tokens < codexContinueFirstRoundMin
+// codexContinueIsLowReasoningRetryCandidate 判断是否需要整体重问一遍（reroll）。
+// 推理量落在 (floor, ceil) 之间（floor<=0 表示不设下限，只要求 tokens>0），说明模型
+// 自己认为已经想完但想得不够多；不要求 encrypted_content，因为重试是重新发送原始
+// 请求，不回放任何 reasoning。
+func codexContinueIsLowReasoningRetryCandidate(tokens, floor, ceil int) bool {
+	if tokens <= 0 || tokens >= ceil {
+		return false
+	}
+	return floor <= 0 || tokens >= floor
+}
+
+// codexContinueWithinCap 判断次数（从1开始计数）是否仍在上限内；capLimit<=0 表示不限制。
+func codexContinueWithinCap(count, capLimit int) bool {
+	return capLimit <= 0 || count <= capLimit
 }
 
 func codexContinueReasoningTokens(usage map[string]any) int {

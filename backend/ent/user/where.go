@@ -180,6 +180,21 @@ func CodexContinueEnabled(v bool) predicate.User {
 	return predicate.User(sql.FieldEQ(FieldCodexContinueEnabled, v))
 }
 
+// CodexContinueMaxContinue applies equality check predicate on the "codex_continue_max_continue" field. It's identical to CodexContinueMaxContinueEQ.
+func CodexContinueMaxContinue(v int) predicate.User {
+	return predicate.User(sql.FieldEQ(FieldCodexContinueMaxContinue, v))
+}
+
+// CodexContinueRetryMax applies equality check predicate on the "codex_continue_retry_max" field. It's identical to CodexContinueRetryMaxEQ.
+func CodexContinueRetryMax(v int) predicate.User {
+	return predicate.User(sql.FieldEQ(FieldCodexContinueRetryMax, v))
+}
+
+// CodexContinueLowReasoningFloor applies equality check predicate on the "codex_continue_low_reasoning_floor" field. It's identical to CodexContinueLowReasoningFloorEQ.
+func CodexContinueLowReasoningFloor(v int) predicate.User {
+	return predicate.User(sql.FieldEQ(FieldCodexContinueLowReasoningFloor, v))
+}
+
 // CreatedAtEQ applies the EQ predicate on the "created_at" field.
 func CreatedAtEQ(v time.Time) predicate.User {
 	return predicate.User(sql.FieldEQ(FieldCreatedAt, v))
@@ -1398,6 +1413,126 @@ func CodexContinueEnabledEQ(v bool) predicate.User {
 // CodexContinueEnabledNEQ applies the NEQ predicate on the "codex_continue_enabled" field.
 func CodexContinueEnabledNEQ(v bool) predicate.User {
 	return predicate.User(sql.FieldNEQ(FieldCodexContinueEnabled, v))
+}
+
+// CodexContinueMaxContinueEQ applies the EQ predicate on the "codex_continue_max_continue" field.
+func CodexContinueMaxContinueEQ(v int) predicate.User {
+	return predicate.User(sql.FieldEQ(FieldCodexContinueMaxContinue, v))
+}
+
+// CodexContinueMaxContinueNEQ applies the NEQ predicate on the "codex_continue_max_continue" field.
+func CodexContinueMaxContinueNEQ(v int) predicate.User {
+	return predicate.User(sql.FieldNEQ(FieldCodexContinueMaxContinue, v))
+}
+
+// CodexContinueMaxContinueIn applies the In predicate on the "codex_continue_max_continue" field.
+func CodexContinueMaxContinueIn(vs ...int) predicate.User {
+	return predicate.User(sql.FieldIn(FieldCodexContinueMaxContinue, vs...))
+}
+
+// CodexContinueMaxContinueNotIn applies the NotIn predicate on the "codex_continue_max_continue" field.
+func CodexContinueMaxContinueNotIn(vs ...int) predicate.User {
+	return predicate.User(sql.FieldNotIn(FieldCodexContinueMaxContinue, vs...))
+}
+
+// CodexContinueMaxContinueGT applies the GT predicate on the "codex_continue_max_continue" field.
+func CodexContinueMaxContinueGT(v int) predicate.User {
+	return predicate.User(sql.FieldGT(FieldCodexContinueMaxContinue, v))
+}
+
+// CodexContinueMaxContinueGTE applies the GTE predicate on the "codex_continue_max_continue" field.
+func CodexContinueMaxContinueGTE(v int) predicate.User {
+	return predicate.User(sql.FieldGTE(FieldCodexContinueMaxContinue, v))
+}
+
+// CodexContinueMaxContinueLT applies the LT predicate on the "codex_continue_max_continue" field.
+func CodexContinueMaxContinueLT(v int) predicate.User {
+	return predicate.User(sql.FieldLT(FieldCodexContinueMaxContinue, v))
+}
+
+// CodexContinueMaxContinueLTE applies the LTE predicate on the "codex_continue_max_continue" field.
+func CodexContinueMaxContinueLTE(v int) predicate.User {
+	return predicate.User(sql.FieldLTE(FieldCodexContinueMaxContinue, v))
+}
+
+// CodexContinueRetryMaxEQ applies the EQ predicate on the "codex_continue_retry_max" field.
+func CodexContinueRetryMaxEQ(v int) predicate.User {
+	return predicate.User(sql.FieldEQ(FieldCodexContinueRetryMax, v))
+}
+
+// CodexContinueRetryMaxNEQ applies the NEQ predicate on the "codex_continue_retry_max" field.
+func CodexContinueRetryMaxNEQ(v int) predicate.User {
+	return predicate.User(sql.FieldNEQ(FieldCodexContinueRetryMax, v))
+}
+
+// CodexContinueRetryMaxIn applies the In predicate on the "codex_continue_retry_max" field.
+func CodexContinueRetryMaxIn(vs ...int) predicate.User {
+	return predicate.User(sql.FieldIn(FieldCodexContinueRetryMax, vs...))
+}
+
+// CodexContinueRetryMaxNotIn applies the NotIn predicate on the "codex_continue_retry_max" field.
+func CodexContinueRetryMaxNotIn(vs ...int) predicate.User {
+	return predicate.User(sql.FieldNotIn(FieldCodexContinueRetryMax, vs...))
+}
+
+// CodexContinueRetryMaxGT applies the GT predicate on the "codex_continue_retry_max" field.
+func CodexContinueRetryMaxGT(v int) predicate.User {
+	return predicate.User(sql.FieldGT(FieldCodexContinueRetryMax, v))
+}
+
+// CodexContinueRetryMaxGTE applies the GTE predicate on the "codex_continue_retry_max" field.
+func CodexContinueRetryMaxGTE(v int) predicate.User {
+	return predicate.User(sql.FieldGTE(FieldCodexContinueRetryMax, v))
+}
+
+// CodexContinueRetryMaxLT applies the LT predicate on the "codex_continue_retry_max" field.
+func CodexContinueRetryMaxLT(v int) predicate.User {
+	return predicate.User(sql.FieldLT(FieldCodexContinueRetryMax, v))
+}
+
+// CodexContinueRetryMaxLTE applies the LTE predicate on the "codex_continue_retry_max" field.
+func CodexContinueRetryMaxLTE(v int) predicate.User {
+	return predicate.User(sql.FieldLTE(FieldCodexContinueRetryMax, v))
+}
+
+// CodexContinueLowReasoningFloorEQ applies the EQ predicate on the "codex_continue_low_reasoning_floor" field.
+func CodexContinueLowReasoningFloorEQ(v int) predicate.User {
+	return predicate.User(sql.FieldEQ(FieldCodexContinueLowReasoningFloor, v))
+}
+
+// CodexContinueLowReasoningFloorNEQ applies the NEQ predicate on the "codex_continue_low_reasoning_floor" field.
+func CodexContinueLowReasoningFloorNEQ(v int) predicate.User {
+	return predicate.User(sql.FieldNEQ(FieldCodexContinueLowReasoningFloor, v))
+}
+
+// CodexContinueLowReasoningFloorIn applies the In predicate on the "codex_continue_low_reasoning_floor" field.
+func CodexContinueLowReasoningFloorIn(vs ...int) predicate.User {
+	return predicate.User(sql.FieldIn(FieldCodexContinueLowReasoningFloor, vs...))
+}
+
+// CodexContinueLowReasoningFloorNotIn applies the NotIn predicate on the "codex_continue_low_reasoning_floor" field.
+func CodexContinueLowReasoningFloorNotIn(vs ...int) predicate.User {
+	return predicate.User(sql.FieldNotIn(FieldCodexContinueLowReasoningFloor, vs...))
+}
+
+// CodexContinueLowReasoningFloorGT applies the GT predicate on the "codex_continue_low_reasoning_floor" field.
+func CodexContinueLowReasoningFloorGT(v int) predicate.User {
+	return predicate.User(sql.FieldGT(FieldCodexContinueLowReasoningFloor, v))
+}
+
+// CodexContinueLowReasoningFloorGTE applies the GTE predicate on the "codex_continue_low_reasoning_floor" field.
+func CodexContinueLowReasoningFloorGTE(v int) predicate.User {
+	return predicate.User(sql.FieldGTE(FieldCodexContinueLowReasoningFloor, v))
+}
+
+// CodexContinueLowReasoningFloorLT applies the LT predicate on the "codex_continue_low_reasoning_floor" field.
+func CodexContinueLowReasoningFloorLT(v int) predicate.User {
+	return predicate.User(sql.FieldLT(FieldCodexContinueLowReasoningFloor, v))
+}
+
+// CodexContinueLowReasoningFloorLTE applies the LTE predicate on the "codex_continue_low_reasoning_floor" field.
+func CodexContinueLowReasoningFloorLTE(v int) predicate.User {
+	return predicate.User(sql.FieldLTE(FieldCodexContinueLowReasoningFloor, v))
 }
 
 // HasAPIKeys applies the HasEdge predicate on the "api_keys" edge.

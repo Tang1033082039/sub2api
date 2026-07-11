@@ -67,6 +67,12 @@ type User struct {
 	RpmLimit int `json:"rpm_limit,omitempty"`
 	// 是否为该用户启用 Codex 连续推理续写灰度功能
 	CodexContinueEnabled bool `json:"codex_continue_enabled,omitempty"`
+	// Codex截断续写轮数上限（0=不限制）
+	CodexContinueMaxContinue int `json:"codex_continue_max_continue,omitempty"`
+	// Codex低推理重试次数上限（0=不限制）
+	CodexContinueRetryMax int `json:"codex_continue_retry_max,omitempty"`
+	// Codex低推理重试下限阈值，单位reasoning_tokens（0=不设下限）
+	CodexContinueLowReasoningFloor int `json:"codex_continue_low_reasoning_floor,omitempty"`
 	// Edges holds the relations/edges for other nodes in the graph.
 	// The values are being populated by the UserQuery when eager-loading is set.
 	Edges        UserEdges `json:"edges"`
@@ -243,7 +249,7 @@ func (*User) scanValues(columns []string) ([]any, error) {
 			values[i] = new(sql.NullBool)
 		case user.FieldBalance, user.FieldFrozenBalance, user.FieldBalanceNotifyThreshold, user.FieldTotalRecharged:
 			values[i] = new(sql.NullFloat64)
-		case user.FieldID, user.FieldConcurrency, user.FieldRpmLimit:
+		case user.FieldID, user.FieldConcurrency, user.FieldRpmLimit, user.FieldCodexContinueMaxContinue, user.FieldCodexContinueRetryMax, user.FieldCodexContinueLowReasoningFloor:
 			values[i] = new(sql.NullInt64)
 		case user.FieldEmail, user.FieldPasswordHash, user.FieldRole, user.FieldStatus, user.FieldUsername, user.FieldNotes, user.FieldTotpSecretEncrypted, user.FieldSignupSource, user.FieldBalanceNotifyThresholdType, user.FieldBalanceNotifyExtraEmails:
 			values[i] = new(sql.NullString)
@@ -425,6 +431,24 @@ func (_m *User) assignValues(columns []string, values []any) error {
 				return fmt.Errorf("unexpected type %T for field codex_continue_enabled", values[i])
 			} else if value.Valid {
 				_m.CodexContinueEnabled = value.Bool
+			}
+		case user.FieldCodexContinueMaxContinue:
+			if value, ok := values[i].(*sql.NullInt64); !ok {
+				return fmt.Errorf("unexpected type %T for field codex_continue_max_continue", values[i])
+			} else if value.Valid {
+				_m.CodexContinueMaxContinue = int(value.Int64)
+			}
+		case user.FieldCodexContinueRetryMax:
+			if value, ok := values[i].(*sql.NullInt64); !ok {
+				return fmt.Errorf("unexpected type %T for field codex_continue_retry_max", values[i])
+			} else if value.Valid {
+				_m.CodexContinueRetryMax = int(value.Int64)
+			}
+		case user.FieldCodexContinueLowReasoningFloor:
+			if value, ok := values[i].(*sql.NullInt64); !ok {
+				return fmt.Errorf("unexpected type %T for field codex_continue_low_reasoning_floor", values[i])
+			} else if value.Valid {
+				_m.CodexContinueLowReasoningFloor = int(value.Int64)
 			}
 		default:
 			_m.selectValues.Set(columns[i], values[i])
@@ -618,6 +642,15 @@ func (_m *User) String() string {
 	builder.WriteString(", ")
 	builder.WriteString("codex_continue_enabled=")
 	builder.WriteString(fmt.Sprintf("%v", _m.CodexContinueEnabled))
+	builder.WriteString(", ")
+	builder.WriteString("codex_continue_max_continue=")
+	builder.WriteString(fmt.Sprintf("%v", _m.CodexContinueMaxContinue))
+	builder.WriteString(", ")
+	builder.WriteString("codex_continue_retry_max=")
+	builder.WriteString(fmt.Sprintf("%v", _m.CodexContinueRetryMax))
+	builder.WriteString(", ")
+	builder.WriteString("codex_continue_low_reasoning_floor=")
+	builder.WriteString(fmt.Sprintf("%v", _m.CodexContinueLowReasoningFloor))
 	builder.WriteByte(')')
 	return builder.String()
 }

@@ -446,6 +446,69 @@ func (_u *UserUpdate) SetNillableCodexContinueEnabled(v *bool) *UserUpdate {
 	return _u
 }
 
+// SetCodexContinueMaxContinue sets the "codex_continue_max_continue" field.
+func (_u *UserUpdate) SetCodexContinueMaxContinue(v int) *UserUpdate {
+	_u.mutation.ResetCodexContinueMaxContinue()
+	_u.mutation.SetCodexContinueMaxContinue(v)
+	return _u
+}
+
+// SetNillableCodexContinueMaxContinue sets the "codex_continue_max_continue" field if the given value is not nil.
+func (_u *UserUpdate) SetNillableCodexContinueMaxContinue(v *int) *UserUpdate {
+	if v != nil {
+		_u.SetCodexContinueMaxContinue(*v)
+	}
+	return _u
+}
+
+// AddCodexContinueMaxContinue adds value to the "codex_continue_max_continue" field.
+func (_u *UserUpdate) AddCodexContinueMaxContinue(v int) *UserUpdate {
+	_u.mutation.AddCodexContinueMaxContinue(v)
+	return _u
+}
+
+// SetCodexContinueRetryMax sets the "codex_continue_retry_max" field.
+func (_u *UserUpdate) SetCodexContinueRetryMax(v int) *UserUpdate {
+	_u.mutation.ResetCodexContinueRetryMax()
+	_u.mutation.SetCodexContinueRetryMax(v)
+	return _u
+}
+
+// SetNillableCodexContinueRetryMax sets the "codex_continue_retry_max" field if the given value is not nil.
+func (_u *UserUpdate) SetNillableCodexContinueRetryMax(v *int) *UserUpdate {
+	if v != nil {
+		_u.SetCodexContinueRetryMax(*v)
+	}
+	return _u
+}
+
+// AddCodexContinueRetryMax adds value to the "codex_continue_retry_max" field.
+func (_u *UserUpdate) AddCodexContinueRetryMax(v int) *UserUpdate {
+	_u.mutation.AddCodexContinueRetryMax(v)
+	return _u
+}
+
+// SetCodexContinueLowReasoningFloor sets the "codex_continue_low_reasoning_floor" field.
+func (_u *UserUpdate) SetCodexContinueLowReasoningFloor(v int) *UserUpdate {
+	_u.mutation.ResetCodexContinueLowReasoningFloor()
+	_u.mutation.SetCodexContinueLowReasoningFloor(v)
+	return _u
+}
+
+// SetNillableCodexContinueLowReasoningFloor sets the "codex_continue_low_reasoning_floor" field if the given value is not nil.
+func (_u *UserUpdate) SetNillableCodexContinueLowReasoningFloor(v *int) *UserUpdate {
+	if v != nil {
+		_u.SetCodexContinueLowReasoningFloor(*v)
+	}
+	return _u
+}
+
+// AddCodexContinueLowReasoningFloor adds value to the "codex_continue_low_reasoning_floor" field.
+func (_u *UserUpdate) AddCodexContinueLowReasoningFloor(v int) *UserUpdate {
+	_u.mutation.AddCodexContinueLowReasoningFloor(v)
+	return _u
+}
+
 // AddAPIKeyIDs adds the "api_keys" edge to the APIKey entity by IDs.
 func (_u *UserUpdate) AddAPIKeyIDs(ids ...int64) *UserUpdate {
 	_u.mutation.AddAPIKeyIDs(ids...)
@@ -1115,6 +1178,24 @@ func (_u *UserUpdate) sqlSave(ctx context.Context) (_node int, err error) {
 	}
 	if value, ok := _u.mutation.CodexContinueEnabled(); ok {
 		_spec.SetField(user.FieldCodexContinueEnabled, field.TypeBool, value)
+	}
+	if value, ok := _u.mutation.CodexContinueMaxContinue(); ok {
+		_spec.SetField(user.FieldCodexContinueMaxContinue, field.TypeInt, value)
+	}
+	if value, ok := _u.mutation.AddedCodexContinueMaxContinue(); ok {
+		_spec.AddField(user.FieldCodexContinueMaxContinue, field.TypeInt, value)
+	}
+	if value, ok := _u.mutation.CodexContinueRetryMax(); ok {
+		_spec.SetField(user.FieldCodexContinueRetryMax, field.TypeInt, value)
+	}
+	if value, ok := _u.mutation.AddedCodexContinueRetryMax(); ok {
+		_spec.AddField(user.FieldCodexContinueRetryMax, field.TypeInt, value)
+	}
+	if value, ok := _u.mutation.CodexContinueLowReasoningFloor(); ok {
+		_spec.SetField(user.FieldCodexContinueLowReasoningFloor, field.TypeInt, value)
+	}
+	if value, ok := _u.mutation.AddedCodexContinueLowReasoningFloor(); ok {
+		_spec.AddField(user.FieldCodexContinueLowReasoningFloor, field.TypeInt, value)
 	}
 	if _u.mutation.APIKeysCleared() {
 		edge := &sqlgraph.EdgeSpec{
@@ -2139,6 +2220,69 @@ func (_u *UserUpdateOne) SetNillableCodexContinueEnabled(v *bool) *UserUpdateOne
 	return _u
 }
 
+// SetCodexContinueMaxContinue sets the "codex_continue_max_continue" field.
+func (_u *UserUpdateOne) SetCodexContinueMaxContinue(v int) *UserUpdateOne {
+	_u.mutation.ResetCodexContinueMaxContinue()
+	_u.mutation.SetCodexContinueMaxContinue(v)
+	return _u
+}
+
+// SetNillableCodexContinueMaxContinue sets the "codex_continue_max_continue" field if the given value is not nil.
+func (_u *UserUpdateOne) SetNillableCodexContinueMaxContinue(v *int) *UserUpdateOne {
+	if v != nil {
+		_u.SetCodexContinueMaxContinue(*v)
+	}
+	return _u
+}
+
+// AddCodexContinueMaxContinue adds value to the "codex_continue_max_continue" field.
+func (_u *UserUpdateOne) AddCodexContinueMaxContinue(v int) *UserUpdateOne {
+	_u.mutation.AddCodexContinueMaxContinue(v)
+	return _u
+}
+
+// SetCodexContinueRetryMax sets the "codex_continue_retry_max" field.
+func (_u *UserUpdateOne) SetCodexContinueRetryMax(v int) *UserUpdateOne {
+	_u.mutation.ResetCodexContinueRetryMax()
+	_u.mutation.SetCodexContinueRetryMax(v)
+	return _u
+}
+
+// SetNillableCodexContinueRetryMax sets the "codex_continue_retry_max" field if the given value is not nil.
+func (_u *UserUpdateOne) SetNillableCodexContinueRetryMax(v *int) *UserUpdateOne {
+	if v != nil {
+		_u.SetCodexContinueRetryMax(*v)
+	}
+	return _u
+}
+
+// AddCodexContinueRetryMax adds value to the "codex_continue_retry_max" field.
+func (_u *UserUpdateOne) AddCodexContinueRetryMax(v int) *UserUpdateOne {
+	_u.mutation.AddCodexContinueRetryMax(v)
+	return _u
+}
+
+// SetCodexContinueLowReasoningFloor sets the "codex_continue_low_reasoning_floor" field.
+func (_u *UserUpdateOne) SetCodexContinueLowReasoningFloor(v int) *UserUpdateOne {
+	_u.mutation.ResetCodexContinueLowReasoningFloor()
+	_u.mutation.SetCodexContinueLowReasoningFloor(v)
+	return _u
+}
+
+// SetNillableCodexContinueLowReasoningFloor sets the "codex_continue_low_reasoning_floor" field if the given value is not nil.
+func (_u *UserUpdateOne) SetNillableCodexContinueLowReasoningFloor(v *int) *UserUpdateOne {
+	if v != nil {
+		_u.SetCodexContinueLowReasoningFloor(*v)
+	}
+	return _u
+}
+
+// AddCodexContinueLowReasoningFloor adds value to the "codex_continue_low_reasoning_floor" field.
+func (_u *UserUpdateOne) AddCodexContinueLowReasoningFloor(v int) *UserUpdateOne {
+	_u.mutation.AddCodexContinueLowReasoningFloor(v)
+	return _u
+}
+
 // AddAPIKeyIDs adds the "api_keys" edge to the APIKey entity by IDs.
 func (_u *UserUpdateOne) AddAPIKeyIDs(ids ...int64) *UserUpdateOne {
 	_u.mutation.AddAPIKeyIDs(ids...)
@@ -2838,6 +2982,24 @@ func (_u *UserUpdateOne) sqlSave(ctx context.Context) (_node *User, err error) {
 	}
 	if value, ok := _u.mutation.CodexContinueEnabled(); ok {
 		_spec.SetField(user.FieldCodexContinueEnabled, field.TypeBool, value)
+	}
+	if value, ok := _u.mutation.CodexContinueMaxContinue(); ok {
+		_spec.SetField(user.FieldCodexContinueMaxContinue, field.TypeInt, value)
+	}
+	if value, ok := _u.mutation.AddedCodexContinueMaxContinue(); ok {
+		_spec.AddField(user.FieldCodexContinueMaxContinue, field.TypeInt, value)
+	}
+	if value, ok := _u.mutation.CodexContinueRetryMax(); ok {
+		_spec.SetField(user.FieldCodexContinueRetryMax, field.TypeInt, value)
+	}
+	if value, ok := _u.mutation.AddedCodexContinueRetryMax(); ok {
+		_spec.AddField(user.FieldCodexContinueRetryMax, field.TypeInt, value)
+	}
+	if value, ok := _u.mutation.CodexContinueLowReasoningFloor(); ok {
+		_spec.SetField(user.FieldCodexContinueLowReasoningFloor, field.TypeInt, value)
+	}
+	if value, ok := _u.mutation.AddedCodexContinueLowReasoningFloor(); ok {
+		_spec.AddField(user.FieldCodexContinueLowReasoningFloor, field.TypeInt, value)
 	}
 	if _u.mutation.APIKeysCleared() {
 		edge := &sqlgraph.EdgeSpec{

@@ -118,6 +118,15 @@ func (User) Fields() []ent.Field {
 		field.Bool("codex_continue_enabled").
 			Default(false).
 			Comment("是否为该用户启用 Codex 连续推理续写灰度功能"),
+		field.Int("codex_continue_max_continue").
+			Default(0).
+			Comment("Codex截断续写轮数上限（0=不限制）"),
+		field.Int("codex_continue_retry_max").
+			Default(2).
+			Comment("Codex低推理重试次数上限（0=不限制）"),
+		field.Int("codex_continue_low_reasoning_floor").
+			Default(150).
+			Comment("Codex低推理重试下限阈值，单位reasoning_tokens（0=不设下限）"),
 	}
 }
 

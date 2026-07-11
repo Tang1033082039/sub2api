@@ -90,6 +90,9 @@ export interface User {
   concurrency: number // Allowed concurrent requests
   rpm_limit?: number // User-level RPM cap (0 = unlimited); effective as fallback when group has no rpm_limit
   codex_continue_enabled?: boolean // Per-user Codex continuation gray-release switch
+  codex_continue_max_continue?: number // Truncation-continue round cap (0 = unlimited)
+  codex_continue_retry_max?: number // Low-reasoning retry attempt cap (0 = unlimited)
+  codex_continue_low_reasoning_floor?: number // Low-reasoning retry floor threshold (0 = no floor)
   status: 'active' | 'disabled' // Account status
   allowed_groups: number[] | null // Allowed group IDs (null = all non-exclusive groups)
   balance_notify_enabled: boolean
@@ -1656,6 +1659,9 @@ export interface UpdateUserRequest {
   balance?: number
   concurrency?: number
   codex_continue_enabled?: boolean
+  codex_continue_max_continue?: number
+  codex_continue_retry_max?: number
+  codex_continue_low_reasoning_floor?: number
   status?: 'active' | 'disabled'
   allowed_groups?: number[] | null
   // 用户专属分组倍率配置 (group_id -> rate_multiplier | null)

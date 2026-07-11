@@ -56,6 +56,12 @@ type User struct {
 	RPMLimit int
 
 	CodexContinueEnabled bool
+	// CodexContinueMaxContinue 截断续写（接续未完成思维链）轮数上限（0 = 不限制）。
+	CodexContinueMaxContinue int
+	// CodexContinueRetryMax 首轮低推理重试次数上限（0 = 不限制）。
+	CodexContinueRetryMax int
+	// CodexContinueLowReasoningFloor 首轮低推理重试下限阈值，单位 reasoning_tokens（0 = 不设下限）。
+	CodexContinueLowReasoningFloor int
 
 	// UserGroupRPMOverride 来自 auth cache snapshot 的 (user, group) RPM 覆盖值。
 	// nil = 该 API Key 对应的 (user, group) 无 override；非 nil 时 checkRPM 直接使用，
