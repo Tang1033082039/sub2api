@@ -483,7 +483,7 @@ func (h *GatewayHandler) GeminiV1BetaModels(c *gin.Context) {
 			var failoverErr *service.UpstreamFailoverError
 			if errors.As(err, &failoverErr) {
 				fs.ExcludeFailedUpstreamSite(c.Request.Context(), account, failoverErr)
-				failoverAction := fs.HandleFailoverError(c.Request.Context(), h.gatewayService, account.ID, account.Platform, failoverErr)
+				failoverAction := fs.HandleFailoverError(c.Request.Context(), h.gatewayService, account.ID, account.Platform, account.GetPoolModeRetryCount(), failoverErr)
 				switch failoverAction {
 				case FailoverContinue:
 					continue

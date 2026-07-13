@@ -255,7 +255,7 @@ func (h *GatewayHandler) ChatCompletions(c *gin.Context) {
 					return
 				}
 				fs.ExcludeFailedUpstreamSite(c.Request.Context(), account, failoverErr)
-				action := fs.HandleFailoverError(c.Request.Context(), h.gatewayService, account.ID, account.Platform, failoverErr)
+				action := fs.HandleFailoverError(c.Request.Context(), h.gatewayService, account.ID, account.Platform, account.GetPoolModeRetryCount(), failoverErr)
 				switch action {
 				case FailoverContinue:
 					continue
@@ -340,3 +340,4 @@ func (h *GatewayHandler) handleCCFailoverExhausted(c *gin.Context, lastErr *serv
 	}
 	h.chatCompletionsErrorResponse(c, statusCode, "server_error", "All available accounts exhausted")
 }
+

@@ -234,7 +234,7 @@ func (h *GatewayHandler) Responses(c *gin.Context) {
 					return
 				}
 				fs.ExcludeFailedUpstreamSite(requestCtx, account, failoverErr)
-				action := fs.HandleFailoverError(requestCtx, h.gatewayService, account.ID, account.Platform, failoverErr)
+				action := fs.HandleFailoverError(requestCtx, h.gatewayService, account.ID, account.Platform, account.GetPoolModeRetryCount(), failoverErr)
 				switch action {
 				case FailoverContinue:
 					continue
@@ -319,3 +319,4 @@ func (h *GatewayHandler) handleResponsesFailoverExhausted(c *gin.Context, lastEr
 	}
 	h.responsesErrorResponse(c, statusCode, "server_error", "All available accounts exhausted")
 }
+
