@@ -1170,8 +1170,9 @@ func writeOpenAIModelsList(c *gin.Context, modelIDs []string) {
 }
 
 func customModelsListSource(platform string, availableModels, fallbackModels []string) []string {
-	// Anthropic / OpenAI(混 Grok) 组：候选需并入平台默认，避免自定义列表里的默认模型被 account mapping 子集滤掉
-	if (platform == service.PlatformAnthropic || platform == service.PlatformOpenAI) && len(availableModels) > 0 {
+	// Anthropic 组：并入默认模型，兼容 mixed antigravity 候选。
+	// OpenAI 组保持 account mapping 子集过滤（无 mapping 时走 fallback，fallback 已含 Grok 默认）。
+	if platform == service.PlatformAnthropic && len(availableModels) > 0 {
 		return mergeModelIDs(availableModels, fallbackModels)
 	}
 	return availableModels

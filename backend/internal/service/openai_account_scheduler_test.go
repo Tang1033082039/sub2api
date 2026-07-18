@@ -934,8 +934,9 @@ func TestOpenAIGatewayService_SelectAccountWithScheduler_StickyWeightedSessionIn
 	cfg.Gateway.OpenAIWS.SchedulerScoreWeights.ErrorRate = 0.8
 	cfg.Gateway.OpenAIWS.SchedulerScoreWeights.TTFT = 0.5
 	cfg.Gateway.OpenAIWS.SchedulerScoreWeights.SessionSticky = 3
+	stickyModel := "gpt-5.1"
 	cache := &schedulerTestGatewayCache{sessionBindings: map[string]int64{
-		"openai:session_hash_weighted_topk": 37101,
+		openAIStickySessionCacheKey("session_hash_weighted_topk", stickyModel): 37101,
 	}}
 	svc := &OpenAIGatewayService{
 		accountRepo:        schedulerTestOpenAIAccountRepo{accounts: accounts},
@@ -950,7 +951,7 @@ func TestOpenAIGatewayService_SelectAccountWithScheduler_StickyWeightedSessionIn
 		&groupID,
 		"",
 		"session_hash_weighted_topk",
-		"gpt-5.1",
+		stickyModel,
 		nil,
 		OpenAIUpstreamTransportAny,
 		false,
@@ -1244,9 +1245,10 @@ func TestOpenAIGatewayService_SelectAccountWithScheduler_Enabled_EmbeddingsSkips
 	}
 	cfg := newSchedulerTestOpenAIWSV2Config()
 	cfg.Gateway.Scheduling.LoadBatchEnabled = false
+	embeddingModel := "text-embedding-3-small"
 	cache := &schedulerTestGatewayCache{
 		sessionBindings: map[string]int64{
-			"openai:session_hash_embeddings": 37021,
+			openAIStickySessionCacheKey("session_hash_embeddings", embeddingModel): 37021,
 		},
 	}
 	svc := &OpenAIGatewayService{
@@ -1264,7 +1266,7 @@ func TestOpenAIGatewayService_SelectAccountWithScheduler_Enabled_EmbeddingsSkips
 		&groupID,
 		"resp_embeddings_chat_only",
 		"session_hash_embeddings",
-		"text-embedding-3-small",
+		embeddingModel,
 		nil,
 		OpenAIUpstreamTransportHTTPSSE,
 		OpenAIEndpointCapabilityEmbeddings,
@@ -1279,7 +1281,7 @@ func TestOpenAIGatewayService_SelectAccountWithScheduler_Enabled_EmbeddingsSkips
 	require.Equal(t, openAIAccountScheduleLayerLoadBalance, decision.Layer)
 	require.False(t, decision.StickyPreviousHit)
 	require.False(t, decision.StickySessionHit)
-	require.Equal(t, int64(37022), cache.sessionBindings["openai:session_hash_embeddings"])
+	require.Equal(t, int64(37022), cache.sessionBindings[openAIStickySessionCacheKey("session_hash_embeddings", embeddingModel)])
 }
 
 func TestOpenAIGatewayService_OpenAIAccountSchedulerMetrics_DisabledNoOp(t *testing.T) {
@@ -1302,7 +1304,9 @@ func TestOpenAIGatewayService_SelectAccountWithScheduler_SessionStickyRateLimite
 	staleBackup := &Account{ID: 31002, Platform: PlatformOpenAI, Type: AccountTypeOAuth, Status: StatusActive, Schedulable: true, Concurrency: 1, Priority: 5, GroupIDs: []int64{groupID}}
 	freshSticky := &Account{ID: 31001, Platform: PlatformOpenAI, Type: AccountTypeOAuth, Status: StatusActive, Schedulable: true, Concurrency: 1, Priority: 0, GroupIDs: []int64{groupID}, RateLimitResetAt: &rateLimitedUntil}
 	freshBackup := &Account{ID: 31002, Platform: PlatformOpenAI, Type: AccountTypeOAuth, Status: StatusActive, Schedulable: true, Concurrency: 1, Priority: 5, GroupIDs: []int64{groupID}}
-	cache := &schedulerTestGatewayCache{sessionBindings: map[string]int64{"openai:session_hash_rate_limited": 31001}}
+	cache := &schedulerTestGatewayCache{sessionBindings: map[string]int64{
+		openAIStickySessionCacheKey("session_hash_rate_limited", "gpt-5.1"): 31001,
+	}}
 	snapshotCache := &openAISnapshotCacheStub{snapshotAccounts: []*Account{staleSticky, staleBackup}, accountsByID: map[int64]*Account{31001: freshSticky, 31002: freshBackup}}
 	snapshotService := &SchedulerSnapshotService{cache: snapshotCache}
 	svc := &OpenAIGatewayService{
@@ -1678,7 +1682,9 @@ func TestOpenAIGatewayService_SelectAccountWithScheduler_SessionStickyDBRuntimeR
 	staleBackup := &Account{ID: 33002, Platform: PlatformOpenAI, Type: AccountTypeOAuth, Status: StatusActive, Schedulable: true, Concurrency: 1, Priority: 5, GroupIDs: []int64{groupID}}
 	dbSticky := Account{ID: 33001, Platform: PlatformOpenAI, Type: AccountTypeOAuth, Status: StatusActive, Schedulable: true, Concurrency: 1, Priority: 0, GroupIDs: []int64{groupID}, RateLimitResetAt: &rateLimitedUntil}
 	dbBackup := Account{ID: 33002, Platform: PlatformOpenAI, Type: AccountTypeOAuth, Status: StatusActive, Schedulable: true, Concurrency: 1, Priority: 5, GroupIDs: []int64{groupID}}
-	cache := &schedulerTestGatewayCache{sessionBindings: map[string]int64{"openai:session_hash_db_runtime_recheck": 33001}}
+	cache := &schedulerTestGatewayCache{sessionBindings: map[string]int64{
+		openAIStickySessionCacheKey("session_hash_db_runtime_recheck", "gpt-5.1"): 33001,
+	}}
 	snapshotCache := &openAISnapshotCacheStub{
 		snapshotAccounts: []*Account{staleSticky, staleBackup},
 		accountsByID:     map[int64]*Account{33001: staleSticky, 33002: staleBackup},
@@ -1872,7 +1878,7 @@ func TestOpenAIGatewayService_SelectAccountWithScheduler_PreviousResponseSticky(
 	require.Equal(t, account.ID, selection.Account.ID)
 	require.Equal(t, openAIAccountScheduleLayerPreviousResponse, decision.Layer)
 	require.True(t, decision.StickyPreviousHit)
-	require.Equal(t, account.ID, cache.sessionBindings["openai:session_hash_001"])
+	require.Equal(t, account.ID, cache.sessionBindings[openAIStickySessionCacheKey("session_hash_001", "gpt-5.1")])
 	if selection.ReleaseFunc != nil {
 		selection.ReleaseFunc()
 	}
@@ -1892,7 +1898,7 @@ func TestOpenAIGatewayService_SelectAccountWithScheduler_SessionSticky(t *testin
 	}
 	cache := &schedulerTestGatewayCache{
 		sessionBindings: map[string]int64{
-			"openai:session_hash_abc": account.ID,
+			openAIStickySessionCacheKey("session_hash_abc", "gpt-5.1"): account.ID,
 		},
 	}
 
@@ -1952,7 +1958,7 @@ func TestOpenAIGatewayService_SelectAccountWithScheduler_SessionStickyBusyKeepsS
 	}
 	cache := &schedulerTestGatewayCache{
 		sessionBindings: map[string]int64{
-			"openai:session_hash_sticky_busy": 21001,
+			openAIStickySessionCacheKey("session_hash_sticky_busy", "gpt-5.1"): 21001,
 		},
 	}
 	cfg := &config.Config{}
@@ -2034,7 +2040,8 @@ func TestOpenAIGatewayService_SelectAccountWithScheduler_SessionStickyEscapeByTT
 			GroupIDs:    []int64{groupID},
 		},
 	}
-	cache := &schedulerTestGatewayCache{sessionBindings: map[string]int64{"openai:session_hash_sticky_ttft": 21101}}
+	stickyKey := openAIStickySessionCacheKey("session_hash_sticky_ttft", "gpt-5.1")
+	cache := &schedulerTestGatewayCache{sessionBindings: map[string]int64{stickyKey: 21101}}
 	cfg := &config.Config{}
 	cfg.Gateway.OpenAIScheduler.StickyEscapeEnabled = true
 	cfg.Gateway.OpenAIScheduler.StickyEscapeTTFTMs = 15000
@@ -2076,7 +2083,7 @@ func TestOpenAIGatewayService_SelectAccountWithScheduler_SessionStickyEscapeByTT
 	require.Equal(t, int64(21102), selection.Account.ID)
 	require.Equal(t, openAIAccountScheduleLayerLoadBalance, decision.Layer)
 	require.False(t, decision.StickySessionHit)
-	require.Equal(t, int64(21101), cache.sessionBindings["openai:session_hash_sticky_ttft"])
+	require.Equal(t, int64(21101), cache.sessionBindings[stickyKey])
 	if selection.ReleaseFunc != nil {
 		selection.ReleaseFunc()
 	}
@@ -2089,7 +2096,8 @@ func TestOpenAIGatewayService_SelectAccountWithScheduler_SessionStickyEscapeByEr
 		{ID: 21201, Platform: PlatformOpenAI, Type: AccountTypeAPIKey, Status: StatusActive, Schedulable: true, Concurrency: 1, Priority: 0, GroupIDs: []int64{groupID}},
 		{ID: 21202, Platform: PlatformOpenAI, Type: AccountTypeAPIKey, Status: StatusActive, Schedulable: true, Concurrency: 1, Priority: 1, GroupIDs: []int64{groupID}},
 	}
-	cache := &schedulerTestGatewayCache{sessionBindings: map[string]int64{"openai:session_hash_sticky_error_rate": 21201}}
+	stickyKey := openAIStickySessionCacheKey("session_hash_sticky_error_rate", "gpt-5.1")
+	cache := &schedulerTestGatewayCache{sessionBindings: map[string]int64{stickyKey: 21201}}
 	cfg := &config.Config{}
 	cfg.Gateway.OpenAIScheduler.StickyEscapeEnabled = true
 	cfg.Gateway.OpenAIScheduler.StickyEscapeTTFTMs = 15000
@@ -2126,7 +2134,7 @@ func TestOpenAIGatewayService_SelectAccountWithScheduler_SessionStickyEscapeByEr
 	require.Equal(t, int64(21202), selection.Account.ID)
 	require.Equal(t, openAIAccountScheduleLayerLoadBalance, decision.Layer)
 	require.False(t, decision.StickySessionHit)
-	require.Equal(t, int64(21201), cache.sessionBindings["openai:session_hash_sticky_error_rate"])
+	require.Equal(t, int64(21201), cache.sessionBindings[stickyKey])
 	if selection.ReleaseFunc != nil {
 		selection.ReleaseFunc()
 	}
@@ -2139,7 +2147,9 @@ func TestOpenAIGatewayService_SelectAccountWithScheduler_SessionStickyBusyEscape
 		{ID: 21301, Platform: PlatformOpenAI, Type: AccountTypeAPIKey, Status: StatusActive, Schedulable: true, Concurrency: 1, Priority: 0, GroupIDs: []int64{groupID}},
 		{ID: 21302, Platform: PlatformOpenAI, Type: AccountTypeAPIKey, Status: StatusActive, Schedulable: true, Concurrency: 1, Priority: 1, GroupIDs: []int64{groupID}},
 	}
-	cache := &schedulerTestGatewayCache{sessionBindings: map[string]int64{"openai:session_hash_sticky_busy_escape": 21301}}
+	cache := &schedulerTestGatewayCache{sessionBindings: map[string]int64{
+		openAIStickySessionCacheKey("session_hash_sticky_busy_escape", "gpt-5.1"): 21301,
+	}}
 	cfg := &config.Config{}
 	cfg.Gateway.OpenAIScheduler.StickyEscapeEnabled = true
 	cfg.Gateway.OpenAIScheduler.StickyEscapeTTFTMs = 15000
@@ -2182,7 +2192,9 @@ func TestOpenAIGatewayService_SelectAccountWithScheduler_SessionStickyEscapeDisa
 		{ID: 21401, Platform: PlatformOpenAI, Type: AccountTypeAPIKey, Status: StatusActive, Schedulable: true, Concurrency: 1, Priority: 0, GroupIDs: []int64{groupID}},
 		{ID: 21402, Platform: PlatformOpenAI, Type: AccountTypeAPIKey, Status: StatusActive, Schedulable: true, Concurrency: 1, Priority: 1, GroupIDs: []int64{groupID}},
 	}
-	cache := &schedulerTestGatewayCache{sessionBindings: map[string]int64{"openai:session_hash_sticky_disabled": 21401}}
+	cache := &schedulerTestGatewayCache{sessionBindings: map[string]int64{
+		openAIStickySessionCacheKey("session_hash_sticky_disabled", "gpt-5.1"): 21401,
+	}}
 	cfg := &config.Config{}
 	cfg.Gateway.OpenAIScheduler.StickyEscapeEnabled = false
 	cfg.Gateway.OpenAIScheduler.StickyEscapeTTFTMs = 15000
@@ -2509,7 +2521,7 @@ func TestOpenAIGatewayService_SelectAccountWithScheduler_SessionSticky_ForceHTTP
 	}
 	cache := &schedulerTestGatewayCache{
 		sessionBindings: map[string]int64{
-			"openai:session_hash_force_http": account.ID,
+			openAIStickySessionCacheKey("session_hash_force_http", "gpt-5.1"): account.ID,
 		},
 	}
 
@@ -2572,7 +2584,7 @@ func TestOpenAIGatewayService_SelectAccountWithScheduler_RequiredWSV2_SkipsStick
 	}
 	cache := &schedulerTestGatewayCache{
 		sessionBindings: map[string]int64{
-			"openai:session_hash_ws_only": 2201,
+			openAIStickySessionCacheKey("session_hash_ws_only", "gpt-5.1"): 2201,
 		},
 	}
 	cfg := newSchedulerTestOpenAIWSV2Config()
@@ -2641,9 +2653,10 @@ func TestOpenAIGatewayService_SelectAccountWithScheduler_ClearsStickyAccountOuts
 			},
 		},
 	}
+	stickyKey := openAIStickySessionCacheKey("session_hash_removed_group", "gpt-5.1")
 	cache := &schedulerTestGatewayCache{
 		sessionBindings: map[string]int64{
-			"openai:session_hash_removed_group": 2401,
+			stickyKey: 2401,
 		},
 	}
 
@@ -2671,8 +2684,8 @@ func TestOpenAIGatewayService_SelectAccountWithScheduler_ClearsStickyAccountOuts
 	require.Equal(t, int64(2402), selection.Account.ID)
 	require.Equal(t, openAIAccountScheduleLayerLoadBalance, decision.Layer)
 	require.False(t, decision.StickySessionHit)
-	require.Equal(t, 1, cache.deletedSessions["openai:session_hash_removed_group"])
-	require.Equal(t, int64(2402), cache.sessionBindings["openai:session_hash_removed_group"])
+	require.Equal(t, 1, cache.deletedSessions[stickyKey])
+	require.Equal(t, int64(2402), cache.sessionBindings[stickyKey])
 	if selection.ReleaseFunc != nil {
 		selection.ReleaseFunc()
 	}
@@ -2893,7 +2906,7 @@ func TestOpenAIGatewayService_OpenAIAccountSchedulerMetrics(t *testing.T) {
 	}
 	cache := &schedulerTestGatewayCache{
 		sessionBindings: map[string]int64{
-			"openai:session_hash_metrics": account.ID,
+			openAIStickySessionCacheKey("session_hash_metrics", "gpt-5.1"): account.ID,
 		},
 	}
 	svc := &OpenAIGatewayService{
@@ -3351,8 +3364,9 @@ func TestOpenAIGatewayService_SelectAccountWithScheduler_StickyWeightedFallbackS
 	cfg.Gateway.OpenAIWS.SchedulerScoreWeights.ErrorRate = 0.8
 	cfg.Gateway.OpenAIWS.SchedulerScoreWeights.TTFT = 0.5
 	cfg.Gateway.OpenAIWS.SchedulerScoreWeights.SessionSticky = 3
+	stickyKey := openAIStickySessionCacheKey("session_weighted_out_of_group", "gpt-5.1")
 	cache := &schedulerTestGatewayCache{sessionBindings: map[string]int64{
-		"openai:session_weighted_out_of_group": 38002,
+		stickyKey: 38002,
 	}}
 	concurrencyCache := schedulerTestConcurrencyCache{
 		acquireResults: map[int64]bool{38001: false, 38002: true},
@@ -3385,7 +3399,7 @@ func TestOpenAIGatewayService_SelectAccountWithScheduler_StickyWeightedFallbackS
 	require.Equal(t, int64(38001), selection.WaitPlan.AccountID)
 	require.Equal(t, openAIAccountScheduleLayerLoadBalance, decision.Layer)
 	// 失效的粘连绑定应被清理，避免后续请求反复走同一条泄漏路径。
-	require.Positive(t, cache.deletedSessions["openai:session_weighted_out_of_group"])
+	require.Positive(t, cache.deletedSessions[stickyKey])
 }
 
 func TestOpenAIGatewayService_SelectAccountWithScheduler_SubscriptionPriorityWaitsOnBusySubscriptionWhenRegularUnusable(t *testing.T) {
