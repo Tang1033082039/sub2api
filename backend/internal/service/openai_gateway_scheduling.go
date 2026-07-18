@@ -170,6 +170,23 @@ func normalizeOpenAICompatiblePlatform(platform string) string {
 	return PlatformOpenAI
 }
 
+// isAccountPlatformAllowedForOpenAISchedule reports whether an account platform may be
+// scheduled under the given OpenAI-compatible schedule context (usually group.Platform).
+// OpenAI groups allow one-way Grok mix-in (shared /v1/responses protocol).
+// Grok groups stay Grok-only.
+func isAccountPlatformAllowedForOpenAISchedule(accountPlatform, schedulePlatform string) bool {
+	schedulePlatform = normalizeOpenAICompatiblePlatform(schedulePlatform)
+	accountPlatform = strings.TrimSpace(strings.ToLower(accountPlatform))
+	switch schedulePlatform {
+	case PlatformOpenAI:
+		return accountPlatform == PlatformOpenAI || accountPlatform == PlatformGrok
+	case PlatformGrok:
+		return accountPlatform == PlatformGrok
+	default:
+		return accountPlatform == schedulePlatform
+	}
+}
+
 func noAvailableOpenAISelectionError(requestedModel string, compactBlocked bool) error {
 	if compactBlocked {
 		return ErrNoAvailableCompactAccounts
@@ -215,7 +232,7 @@ func openAICompactSupportTier(account *Account) int {
 // 检查母账号凭据可用性；该检查未内置于本函数，以避免注入 DB 依赖。
 func isOpenAICompatibleAccountEligibleForRequest(ctx context.Context, account *Account, platform string, requestedModel string, requireCompact bool, requiredCapability OpenAIEndpointCapability) bool {
 	platform = normalizeOpenAICompatiblePlatform(platform)
-	if account == nil || account.Platform != platform || !account.IsOpenAICompatible() || !account.IsSchedulableForModelWithContext(ctx, requestedModel) {
+	if account == nil || !isAccountPlatformAllowedForOpenAISchedule(account.Platform, platform) || !account.IsOpenAICompatible() || !account.IsSchedulableForModelWithContext(ctx, requestedModel) {
 		return false
 	}
 	if account.IsOpenAI() {
@@ -1195,6 +1212,10 @@ func (s *OpenAIGatewayService) selectAccountWithLoadAwareness(ctx context.Contex
 
 func (s *OpenAIGatewayService) listSchedulableAccounts(ctx context.Context, groupID *int64, platform string) ([]Account, error) {
 	platform = normalizeOpenAICompatiblePlatform(platform)
+	// OpenAI 分组单向混入 Grok 账号（协议同为 /v1/responses）
+	if platform == PlatformOpenAI {
+		return s.listOpenAIGroupMixedSchedulableAccounts(ctx, groupID)
+	}
 	if s.schedulerSnapshot != nil {
 		accounts, _, err := s.schedulerSnapshot.ListSchedulableAccounts(ctx, groupID, platform, false)
 		return accounts, err
@@ -1207,6 +1228,42 @@ func (s *OpenAIGatewayService) listSchedulableAccounts(ctx context.Context, grou
 		accounts, err = s.accountRepo.ListSchedulableByGroupIDAndPlatform(ctx, *groupID, platform)
 	} else {
 		accounts, err = s.accountRepo.ListSchedulableUngroupedByPlatform(ctx, platform)
+	}
+	if err != nil {
+		return nil, fmt.Errorf("query accounts failed: %w", err)
+	}
+	return accounts, nil
+}
+
+// listOpenAIGroupMixedSchedulableAccounts loads OpenAI + Grok accounts for an OpenAI group.
+func (s *OpenAIGatewayService) listOpenAIGroupMixedSchedulableAccounts(ctx context.Context, groupID *int64) ([]Account, error) {
+	platforms := []string{PlatformOpenAI, PlatformGrok}
+	if s.schedulerSnapshot != nil {
+		merged := make([]Account, 0)
+		seen := make(map[int64]struct{})
+		for _, p := range platforms {
+			part, _, err := s.schedulerSnapshot.ListSchedulableAccounts(ctx, groupID, p, false)
+			if err != nil {
+				return nil, err
+			}
+			for i := range part {
+				if _, ok := seen[part[i].ID]; ok {
+					continue
+				}
+				seen[part[i].ID] = struct{}{}
+				merged = append(merged, part[i])
+			}
+		}
+		return merged, nil
+	}
+	var accounts []Account
+	var err error
+	if s.cfg != nil && s.cfg.RunMode == config.RunModeSimple {
+		accounts, err = s.accountRepo.ListSchedulableByPlatforms(ctx, platforms)
+	} else if groupID != nil {
+		accounts, err = s.accountRepo.ListSchedulableByGroupIDAndPlatforms(ctx, *groupID, platforms)
+	} else {
+		accounts, err = s.accountRepo.ListSchedulableUngroupedByPlatforms(ctx, platforms)
 	}
 	if err != nil {
 		return nil, fmt.Errorf("query accounts failed: %w", err)

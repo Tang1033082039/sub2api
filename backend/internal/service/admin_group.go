@@ -77,7 +77,7 @@ func (s *adminServiceImpl) GetGroupModelsListCandidates(ctx context.Context, id 
 		seen[model] = struct{}{}
 	}
 	for _, acc := range accounts {
-		if acc.Platform != platform {
+		if !isAccountPlatformAllowedForModelsListCandidates(acc.Platform, platform) {
 			continue
 		}
 		for model := range acc.GetModelMapping() {
@@ -95,10 +95,22 @@ func (s *adminServiceImpl) GetGroupModelsListCandidates(ctx context.Context, id 
 	return candidates, nil
 }
 
+// isAccountPlatformAllowedForModelsListCandidates mirrors OpenAI-group one-way Grok mix-in:
+// OpenAI groups surface OpenAI + Grok account mappings; other groups stay same-platform.
+func isAccountPlatformAllowedForModelsListCandidates(accountPlatform, groupPlatform string) bool {
+	groupPlatform = strings.TrimSpace(strings.ToLower(groupPlatform))
+	accountPlatform = strings.TrimSpace(strings.ToLower(accountPlatform))
+	if groupPlatform == PlatformOpenAI {
+		return accountPlatform == PlatformOpenAI || accountPlatform == PlatformGrok
+	}
+	return accountPlatform == groupPlatform
+}
+
 func defaultModelsListCandidateIDs(platform string) []string {
 	switch platform {
 	case PlatformOpenAI:
-		return openai.DefaultModelIDs()
+		// OpenAI 组可混入 Grok 账号，候选列表包含两侧默认模型
+		return mergeModelIDLists(openai.DefaultModelIDs(), xai.DefaultModelIDs())
 	case PlatformGemini:
 		ids := make([]string, 0, len(geminicli.DefaultModels))
 		for _, model := range geminicli.DefaultModels {
@@ -121,6 +133,25 @@ func defaultModelsListCandidateIDs(platform string) []string {
 		}
 		return ids
 	}
+}
+
+func mergeModelIDLists(parts ...[]string) []string {
+	seen := make(map[string]struct{})
+	out := make([]string, 0)
+	for _, part := range parts {
+		for _, model := range part {
+			model = strings.TrimSpace(model)
+			if model == "" {
+				continue
+			}
+			if _, ok := seen[model]; ok {
+				continue
+			}
+			seen[model] = struct{}{}
+			out = append(out, model)
+		}
+	}
+	return out
 }
 
 func defaultAllowImageGenerationForPlatform(platform string) bool {
