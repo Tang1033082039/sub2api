@@ -1708,7 +1708,7 @@ func (s *defaultOpenAIAccountScheduler) isAccountRequestCompatibleReason(ctx con
 		return false, "runtime_blocked"
 	}
 	if isUpstreamSiteExcluded(ctx, account) {
-		return false
+		return false, "upstream_site_excluded"
 	}
 	// Quota auto-pause must be evaluated during the initial filter too. Without it the
 	// TopK candidate pool can be filled with paused accounts and the later fresh/DB
