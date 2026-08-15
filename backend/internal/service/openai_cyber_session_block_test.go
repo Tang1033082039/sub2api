@@ -139,6 +139,21 @@ func (c *comboCacheAndStore) SetUpstreamSiteCooldown(_ context.Context, _ string
 func (c *comboCacheAndStore) IsUpstreamSiteCooling(_ context.Context, _ string) (bool, error) {
 	return false, nil
 }
+
+func (c *comboCacheAndStore) SetGrokVideoPendingBilling(_ context.Context, _ string, _ []byte, _ time.Duration) error {
+	return nil
+}
+func (c *comboCacheAndStore) GetGrokVideoPendingBilling(_ context.Context, _ string) ([]byte, error) {
+	return nil, nil
+}
+func (c *comboCacheAndStore) ClaimGrokVideoBilled(_ context.Context, _ string, _ time.Duration) (bool, error) {
+	return true, nil
+}
+
+func (c *comboCacheAndStore) ReleaseGrokVideoBilled(_ context.Context, _ string) error {
+	return nil
+}
+
 func (c *comboCacheAndStore) SetCyberSessionBlocked(ctx context.Context, key string, ttl time.Duration) error {
 	return c.store.SetCyberSessionBlocked(ctx, key, ttl)
 }
