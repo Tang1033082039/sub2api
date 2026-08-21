@@ -66,9 +66,23 @@ func explicitOpenAISessionID(c *gin.Context, body []byte) string {
 
 	sessionID := explicitOpenAIHeaderSessionID(c)
 	if sessionID == "" && len(body) > 0 {
-		sessionID = strings.TrimSpace(gjson.GetBytes(body, "prompt_cache_key").String())
+		sessionID = strings.TrimSpace(openAIRequestPayloadView(body).Get("prompt_cache_key").String())
 	}
 	return sessionID
+}
+
+// openAIRequestPayloadView unwraps Responses WebSocket event envelopes while
+// leaving ordinary HTTP objects untouched even when they contain a response
+// field for another purpose.
+func openAIRequestPayloadView(body []byte) gjson.Result {
+	root := parseRawJSONView(body)
+	eventType := strings.ToLower(strings.TrimSpace(root.Get("type").String()))
+	if strings.HasPrefix(eventType, "response.") {
+		if response := root.Get("response"); response.Exists() && response.IsObject() {
+			return response
+		}
+	}
+	return root
 }
 
 // explicitOpenAIRequestSessionID extends the common OpenAI session signals
@@ -91,7 +105,7 @@ func explicitOpenAIRequestSessionID(c *gin.Context, body []byte) string {
 		sessionID = strings.TrimSpace(c.GetHeader(grokConversationIDHeader))
 	}
 	if sessionID == "" && len(body) > 0 {
-		sessionID = strings.TrimSpace(gjson.GetBytes(body, "prompt_cache_key").String())
+		sessionID = strings.TrimSpace(openAIRequestPayloadView(body).Get("prompt_cache_key").String())
 	}
 	if sessionID == "" && isGrokRequestContext(c) && len(body) > 0 {
 		sessionID = grokPreviousResponseSessionSeed(body)
@@ -243,19 +257,51 @@ func (s *OpenAIGatewayService) SelectAccountForModelWithExclusions(ctx context.C
 	return s.selectAccountForModelWithExclusions(s.withOpenAIQuotaAutoPauseContext(ctx), groupID, PlatformOpenAI, sessionHash, requestedModel, excludedIDs, false, 0, "", false)
 }
 
-func normalizeOpenAICompatiblePlatform(platform string) string {
-	if platform == PlatformGrok {
-		return PlatformGrok
+// SelectAccountForTokenCount selects an account for a non-billable token-count
+// request. It applies the normal platform, model, capability, and runtime
+// eligibility checks without acquiring or waiting for a generation slot.
+func (s *OpenAIGatewayService) SelectAccountForTokenCount(
+	ctx context.Context,
+	groupID *int64,
+	sessionHash string,
+	requestedModel string,
+	requiredCapability OpenAIEndpointCapability,
+	platform string,
+) (*Account, error) {
+	ctx = WithOpenAIProfitControlSuppressed(ctx)
+	ctx = s.withOpenAIQuotaAutoPauseContext(ctx)
+	return s.selectAccountForModelWithExclusions(
+		ctx,
+		groupID,
+		platform,
+		sessionHash,
+		requestedModel,
+		nil,
+		false,
+		0,
+		requiredCapability,
+		false,
+	)
+}
+
+// NormalizeOpenAICompatiblePlatform 保留 grok 与国产 OpenAI 兼容供应商（kimi/zhipu/
+// deepseek）的原值，其他值一律归一为 openai。调度器据此对账号与请求做精确平台匹配：
+// kimi 分组请求只命中 kimi 账号，语义与 openai/grok 一致。
+func NormalizeOpenAICompatiblePlatform(platform string) string {
+	switch platform {
+	case PlatformGrok, PlatformKimi, PlatformZhipu, PlatformDeepseek:
+		return platform
+	default:
+		return PlatformOpenAI
 	}
-	return PlatformOpenAI
 }
 
 // isAccountPlatformAllowedForOpenAISchedule reports whether an account platform may be
 // scheduled under the given OpenAI-compatible schedule context (usually group.Platform).
 // OpenAI groups allow one-way Grok mix-in (shared /v1/responses protocol).
-// Grok groups stay Grok-only.
+// Grok groups stay Grok-only. CN providers keep exact-platform matching.
 func isAccountPlatformAllowedForOpenAISchedule(accountPlatform, schedulePlatform string) bool {
-	schedulePlatform = normalizeOpenAICompatiblePlatform(schedulePlatform)
+	schedulePlatform = NormalizeOpenAICompatiblePlatform(schedulePlatform)
 	accountPlatform = strings.TrimSpace(strings.ToLower(accountPlatform))
 	switch schedulePlatform {
 	case PlatformOpenAI:
@@ -268,7 +314,7 @@ func isAccountPlatformAllowedForOpenAISchedule(accountPlatform, schedulePlatform
 }
 
 // noAvailableOpenAISelectionError builds the standard "no account available" error
-// while preserving the compact-specific error when applicable.
+// while preserving the legacy /responses/compact error when applicable.
 // details carries an optional machine-parseable exclusion summary (e.g.
 // "pool=2, filtered: quota_auto_pause_7d=1 runtime_blocked=1") appended in
 // parentheses. It is for server-side logs / ops diagnostics only: handlers
@@ -344,7 +390,7 @@ func isOpenAICompatibleAccountEligibleForRequest(ctx context.Context, account *A
 // ordinary scheduling gate. Legacy selection uses it before classifying the
 // profit veto so earlier failures retain their actual reason.
 func isOpenAICompatibleAccountEligibleForRequestBeforeProfit(ctx context.Context, account *Account, platform string, requestedModel string, requireCompact bool, requiredCapability OpenAIEndpointCapability) bool {
-	platform = normalizeOpenAICompatiblePlatform(platform)
+	platform = NormalizeOpenAICompatiblePlatform(platform)
 	if account == nil || !isAccountPlatformAllowedForOpenAISchedule(account.Platform, platform) || !account.IsOpenAICompatible() || !account.IsSchedulableForModelWithContext(ctx, requestedModel) {
 		return false
 	}
@@ -729,6 +775,17 @@ func resolveOpenAIAccountUpstreamModelForRequest(account *Account, requestedMode
 		return upstreamModel
 	}
 
+	// Compact mappings are keyed by the client-visible model. Prefer an exact
+	// compact rule before ordinary account mapping; otherwise a normal alias can
+	// hide the compact-specific rule and make scheduling disagree with Forward.
+	if requireCompact && account != nil {
+		if compactModel, matched := account.ResolveCompactMappedModel(strings.TrimSpace(requestedModel)); matched {
+			if compactModel = strings.TrimSpace(compactModel); compactModel != "" {
+				return compactModel
+			}
+		}
+	}
+
 	upstreamModel := resolveOpenAIForwardModel(account, requestedModel, "")
 	if upstreamModel == "" {
 		return ""
@@ -742,9 +799,42 @@ func resolveOpenAIAccountUpstreamModelForRequest(account *Account, requestedMode
 	return normalizeOpenAIModelForUpstream(account, upstreamModel)
 }
 
+// ResolveOpenAIAccountUpstreamModelForRequest exposes the scheduler's exact
+// account mapping chain to handler-side outcome reporting.
+func ResolveOpenAIAccountUpstreamModelForRequest(account *Account, requestedModel string, requireCompact bool) string {
+	return resolveOpenAIAccountUpstreamModelForRequest(account, requestedModel, requireCompact)
+}
+
+// resolveOpenAIForwardMappedModels is the shared account mapping chain for
+// Forward callers. billingModel retains the ordinary mapping used for usage
+// accounting, while upstreamModel is the model the scheduler has admitted.
+func resolveOpenAIForwardMappedModels(account *Account, requestedModel string, requireCompact bool) (billingModel, upstreamModel string) {
+	requestedModel = strings.TrimSpace(requestedModel)
+	if account != nil && account.IsOpenAIPassthroughEnabled() {
+		billingModel = requestedModel
+	} else if account != nil {
+		billingModel = strings.TrimSpace(account.GetMappedModel(requestedModel))
+	}
+	if billingModel == "" {
+		billingModel = requestedModel
+	}
+	upstreamModel = resolveOpenAIAccountUpstreamModelForRequest(account, requestedModel, requireCompact)
+	if strings.TrimSpace(upstreamModel) == "" {
+		upstreamModel = billingModel
+	}
+	return billingModel, upstreamModel
+}
+
+func resolveOpenAIErrorSchedulingModel(billingModel, upstreamModel string) string {
+	if upstreamModel = strings.TrimSpace(upstreamModel); upstreamModel != "" {
+		return upstreamModel
+	}
+	return strings.TrimSpace(billingModel)
+}
+
 func (s *OpenAIGatewayService) selectAccountForModelWithExclusions(ctx context.Context, groupID *int64, platform string, sessionHash string, requestedModel string, excludedIDs map[int64]struct{}, requireCompact bool, stickyAccountID int64, requiredCapability OpenAIEndpointCapability, preferLowUpstreamRate bool) (*Account, error) {
 	ctx = withOpenAIStickyModel(ctx, requestedModel)
-	platform = normalizeOpenAICompatiblePlatform(platform)
+	platform = NormalizeOpenAICompatiblePlatform(platform)
 	if s.checkChannelPricingRestriction(ctx, groupID, requestedModel) {
 		slog.Warn("channel pricing restriction blocked request",
 			"group_id", derefGroupID(groupID),
@@ -824,7 +914,7 @@ func (s *OpenAIGatewayService) tryStickySessionHit(ctx context.Context, groupID 
 	if sessionHash == "" {
 		return nil
 	}
-	platform = normalizeOpenAICompatiblePlatform(platform)
+	platform = NormalizeOpenAICompatiblePlatform(platform)
 
 	accountID := stickyAccountID
 	if accountID <= 0 {
@@ -894,7 +984,7 @@ func (s *OpenAIGatewayService) tryStickySessionHit(ctx context.Context, groupID 
 // true); the third contains deterministic
 // exclusion diagnostics for the evaluated snapshot.
 func (s *OpenAIGatewayService) selectBestAccount(ctx context.Context, groupID *int64, platform string, accounts []Account, requestedModel string, excludedIDs map[int64]struct{}, requireCompact bool, preferredSiteKey string, requiredCapability OpenAIEndpointCapability, preferLowUpstreamRate bool) (*Account, bool, openAISelectionFilterStats) {
-	platform = normalizeOpenAICompatiblePlatform(platform)
+	platform = NormalizeOpenAICompatiblePlatform(platform)
 	compactBlocked := false
 	filterStats := openAISelectionFilterStats{pool: len(accounts)}
 	needsUpstreamCheck := s.needsUpstreamChannelRestrictionCheck(ctx, groupID)
@@ -1017,7 +1107,7 @@ func (s *OpenAIGatewayService) SelectAccountWithLoadAwareness(ctx context.Contex
 
 func (s *OpenAIGatewayService) selectAccountWithLoadAwareness(ctx context.Context, groupID *int64, platform string, sessionHash string, requestedModel string, excludedIDs map[int64]struct{}, requireCompact bool, requiredCapability OpenAIEndpointCapability, useUpstreamTokenCost bool) (*AccountSelectionResult, error) {
 	ctx = withOpenAIStickyModel(ctx, requestedModel)
-	platform = normalizeOpenAICompatiblePlatform(platform)
+	platform = NormalizeOpenAICompatiblePlatform(platform)
 	if s.checkChannelPricingRestriction(ctx, groupID, requestedModel) {
 		slog.Warn("channel pricing restriction blocked request",
 			"group_id", derefGroupID(groupID),
@@ -1368,7 +1458,7 @@ func (s *OpenAIGatewayService) selectAccountWithLoadAwareness(ctx context.Contex
 }
 
 func (s *OpenAIGatewayService) listSchedulableAccounts(ctx context.Context, groupID *int64, platform string) ([]Account, error) {
-	platform = normalizeOpenAICompatiblePlatform(platform)
+	platform = NormalizeOpenAICompatiblePlatform(platform)
 	// OpenAI 分组单向混入 Grok 账号（协议同为 /v1/responses）
 	if platform == PlatformOpenAI {
 		return s.listOpenAIGroupMixedSchedulableAccounts(ctx, groupID)
@@ -1400,7 +1490,7 @@ func (s *OpenAIGatewayService) listOpenAIGroupMixedSchedulableAccounts(ctx conte
 }
 
 func (s *OpenAIGatewayService) listSchedulableAccountsSinglePlatform(ctx context.Context, groupID *int64, platform string) ([]Account, error) {
-	platform = normalizeOpenAICompatiblePlatform(platform)
+	platform = NormalizeOpenAICompatiblePlatform(platform)
 	if s.schedulerSnapshot != nil {
 		accounts, _, err := s.schedulerSnapshot.ListSchedulableAccounts(ctx, groupID, platform, false)
 		if err != nil {
@@ -1453,7 +1543,7 @@ func (s *OpenAIGatewayService) resolveFreshSchedulableOpenAIAccountBeforeProfit(
 	if account == nil {
 		return nil
 	}
-	platform = normalizeOpenAICompatiblePlatform(platform)
+	platform = NormalizeOpenAICompatiblePlatform(platform)
 
 	fresh := account
 	if s.schedulerSnapshot != nil {
@@ -1511,7 +1601,7 @@ func (s *OpenAIGatewayService) recheckSelectedOpenAIAccountFromDBBeforeProfit(ct
 	if account == nil {
 		return nil
 	}
-	platform = normalizeOpenAICompatiblePlatform(platform)
+	platform = NormalizeOpenAICompatiblePlatform(platform)
 	if s.schedulerSnapshot == nil || s.accountRepo == nil {
 		if !isOpenAICompatibleAccountEligibleForRequestBeforeProfit(ctx, account, platform, requestedModel, requireCompact, requiredCapability) {
 			return nil
